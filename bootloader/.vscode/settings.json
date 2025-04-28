@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "config.h": "c",
+        "public_key.h": "c",
+        "app_status.h": "c"
+    }
+}
