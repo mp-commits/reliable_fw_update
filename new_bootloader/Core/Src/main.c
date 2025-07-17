@@ -89,23 +89,27 @@ static void JumpToApplication(void)
 {
   printf("Jumping to application\r\n");
   
-  /* Reset the Clock */
-  HAL_RCC_DeInit();
-  HAL_DeInit();
-
-  SysTick->CTRL = 0;
-  SysTick->LOAD = 0;
-  SysTick->VAL = 0;
+  uint32_t app_stack = *(__IO uint32_t*)APP_START_ADDRESS;
+  uint32_t app_reset_handler = *(__IO uint32_t*)(APP_START_ADDRESS + 4);
 
   __disable_irq();
+  for (int i = 0; i < 8; i++) {
+      NVIC->ICER[i] = 0xFFFFFFFF;
+      NVIC->ICPR[i] = 0xFFFFFFFF;
+  }
+
+  HAL_DeInit();
+  HAL_RCC_DeInit();
+  SysTick->CTRL = 0;
+  SysTick->LOAD = 0;
+  SysTick->VAL  = 0;
 
   SCB->VTOR = APP_START_ADDRESS;
 
-  __set_MSP(*(volatile uint32_t*) APP_START_ADDRESS);
+  __set_MSP(app_stack);
 
-  /* Jump to application */
-  pFunction app_reset_handler = (pFunction)(APP_START_ADDRESS + 4U);
-  app_reset_handler();
+  pFunction app_entry = (pFunction)app_reset_handler;
+  app_entry();
 }
 
 /* USER CODE END 0 */
