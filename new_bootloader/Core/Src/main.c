@@ -158,7 +158,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); // red LED
+    HAL_Delay(500);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
