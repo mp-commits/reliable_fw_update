@@ -32,7 +32,7 @@ typedef void (*pFunction)(void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_START_ADDRESS 0x08010000U
+#define APP_START_ADDRESS 0x08010200U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/

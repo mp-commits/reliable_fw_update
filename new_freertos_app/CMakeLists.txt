@@ -40,6 +40,8 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+add_subdirectory($ENV{FW_UPDATE_LIBS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/FwUpdateLibs)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -48,6 +50,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    Core/Src/metadata.c
     Core/Src/tcpserver.c
 )
 
@@ -66,4 +69,33 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
+    libs::fragmentstore
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+    COMMAND ${CMAKE_OBJCOPY} -O ihex --gap-fill=0x00
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+            ${CMAKE_CURRENT_BINARY_DIR}/$<TARGET_FILE_BASE_NAME:${CMAKE_PROJECT_NAME}>.hex
+    DEPENDS $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+    COMMENT "Converting ELF to HEX with gap fill"
+)
+
+add_custom_target(
+    create_hex ALL
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
+    COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary
+            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+            ${CMAKE_CURRENT_BINARY_DIR}/$<TARGET_FILE_BASE_NAME:${CMAKE_PROJECT_NAME}>.bin
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+    COMMENT "Converting HEX to BIN"
+)
+
+add_custom_target(
+    create_bin ALL
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
 )

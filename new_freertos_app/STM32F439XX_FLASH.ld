@@ -63,16 +63,24 @@ MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 192K
 CCMRAM (xrw)      : ORIGIN = 0x10000000, LENGTH = 64K
-FLASH (rx)      : ORIGIN = 0x8010000, LENGTH = 2048K - 64K
+METADATA(r)     : ORIGIN = 0x8010000, LENGTH = 0x200
+FLASH (rx)      : ORIGIN = 0x8010200, LENGTH = 2048K - 64K - 0x200
 }
 
 /* Define output sections */
 SECTIONS
 {
+  /* Metadata is before actual firmware code */ 
+  .metadata :
+  {
+    KEEP(*(.metadata))
+  } >METADATA
+
   /* The startup code goes first into FLASH */
   .isr_vector :
   {
     . = ALIGN(4);
+    ISR_VECTOR_START = .;
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
   } >FLASH
