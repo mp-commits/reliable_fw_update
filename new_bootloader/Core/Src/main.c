@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "stdbool.h"
+#include "fragmentstore/fragmentstore.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,7 +33,7 @@ typedef void (*pFunction)(void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_START_ADDRESS 0x08010200U
+#define APP_METADATA_ADDRESS 0x08010000U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -75,22 +76,52 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   printf("Bootloader button interrupt\r\n");
 }
 
-static bool IsApplicationValid(void)
+static uint32_t Crc32(const uint8_t* data, size_t size)
 {
-  uint32_t sp = *(__IO uint32_t*)APP_START_ADDRESS;
-  //uint32_t pc = *(__IO uint32_t*)(APP_START_ADDRESS + 4);
+  uint32_t r = ~0; const uint8_t *end = data + size;
+ 
+  while(data < end)
+  {
+    r ^= *data++;
+ 
+    for(int i = 0; i < 8; i++)
+    {
+      uint32_t t = ~((r&1) - 1); r = (r>>1) ^ (0xEDB88320 & t);
+    }
+  }
+ 
+  return ~r;
+}
+
+static bool IsApplicationValid(const Metadata_t* metadata)
+{
+  const uint32_t fwSignCrc = Crc32(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
+  const uint32_t metaSignCrc = Crc32(metadata->metadataSignature, sizeof(metadata->metadataSignature));
+
+  printf("Firmware type:            %lu\r\n", metadata->type);
+  printf("Firmware version:         0x%lX\r\n", metadata->version);
+  printf("Firmware rollback number: %lu\r\n", metadata->rollbackNumber);
+  printf("Firmware ID:              0x%lX\r\n", metadata->firmwareId);
+  printf("Firmware start address:   0x%lX\r\n", metadata->startAddress);
+  printf("Firmware size:            0x%lX\r\n", metadata->firmwareSize);
+  printf("Firmware name:            %s\r\n", metadata->name);
+  printf("Firmware signature CRC32: 0x%lX\r\n", fwSignCrc);
+  printf("Metadata signature CRC32: 0x%lX\r\n", metaSignCrc);
+
+  uint32_t sp = *(__IO uint32_t*)metadata->startAddress;
+  //uint32_t pc = *(__IO uint32_t*)(metadata->startAddress + 4);
 
   const bool stackPointerValid = sp == 0x20030000U;
 
   return stackPointerValid;
 }
 
-static void JumpToApplication(void)
+static void JumpTo(uint32_t address)
 {
   printf("Jumping to application\r\n");
   
-  uint32_t app_stack = *(__IO uint32_t*)APP_START_ADDRESS;
-  uint32_t app_reset_handler = *(__IO uint32_t*)(APP_START_ADDRESS + 4);
+  uint32_t app_stack = *(__IO uint32_t*)address;
+  uint32_t app_reset_handler = *(__IO uint32_t*)(address + 4);
 
   __disable_irq();
   for (int i = 0; i < 8; i++) {
@@ -104,7 +135,7 @@ static void JumpToApplication(void)
   SysTick->LOAD = 0;
   SysTick->VAL  = 0;
 
-  SCB->VTOR = APP_START_ADDRESS;
+  SCB->VTOR = address;
 
   __set_MSP(app_stack);
 
@@ -148,9 +179,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
   printf("Bootloader initialized\r\n");
 
-  if (IsApplicationValid())
+  const Metadata_t* metadata = (const Metadata_t*)(APP_METADATA_ADDRESS);
+
+  if (IsApplicationValid(metadata))
   {
-    JumpToApplication();
+    JumpTo(metadata->startAddress);
   }
 
   printf("No valid application\r\n");
