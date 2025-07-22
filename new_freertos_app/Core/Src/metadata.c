@@ -60,10 +60,11 @@ extern const uint32_t ISR_VECTOR_START[];
 
 static const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
 {
-    .type = 0U,
+    .magic = "_M_E_T_A_D_A_T_A",
+    .type = 0xA5A5A5A5U,
     .version = 1U,
     .rollbackNumber = 0U,
-    .firmwareId = 0x8BADF00DU,
+    .firmwareId = 0xF8002A3BU,
     .startAddress = (uint32_t)ISR_VECTOR_START,
     .firmwareSize = 0x00000000U,
     .name = "test_firmware_ver1\0\0\0\0\0\0\0\0\0\0\0\0\0",

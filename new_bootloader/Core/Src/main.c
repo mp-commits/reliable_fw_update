@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdio.h"
 #include "stdbool.h"
+#include "string.h"
 #include "fragmentstore/fragmentstore.h"
 /* USER CODE END Includes */
 
@@ -98,6 +99,12 @@ static bool IsApplicationValid(const Metadata_t* metadata)
   const uint32_t fwSignCrc = Crc32(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
   const uint32_t metaSignCrc = Crc32(metadata->metadataSignature, sizeof(metadata->metadataSignature));
 
+  /* Add \0 terminator to metadata magic string */
+  char metaStr[sizeof(metadata->magic) + 1U];
+  memcpy(metaStr, metadata->magic, sizeof(metadata->magic));
+  metaStr[sizeof(metadata->magic)] = '\0';
+
+  printf("Metadata magic:           %s\r\n", metaStr);
   printf("Firmware type:            %lu\r\n", metadata->type);
   printf("Firmware version:         0x%lX\r\n", metadata->version);
   printf("Firmware rollback number: %lu\r\n", metadata->rollbackNumber);
