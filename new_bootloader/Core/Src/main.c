@@ -24,6 +24,7 @@
 #include "stdio.h"
 #include "stdbool.h"
 #include "string.h"
+#include "ed25519.h"
 #include "fragmentstore/fragmentstore.h"
 /* USER CODE END Includes */
 
@@ -34,7 +35,9 @@ typedef void (*pFunction)(void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_METADATA_ADDRESS 0x08010000U
+#define APP_METADATA_ADDRESS  0x08010000U
+#define FIRST_FLASH_ADDRESS   (APP_METADATA_ADDRESS + sizeof(Metadata_t))
+#define LAST_FLASH_ADDRESS    (0x82000000U)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,6 +51,13 @@ SPI_HandleTypeDef hspi3;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+
+static const uint8_t PUBLIC_KEY[32] = {
+    0x8f, 0x0d, 0xeb, 0x67, 0xb9, 0xfa, 0x75, 0xc5,
+    0x68, 0x25, 0x00, 0x19, 0x86, 0x16, 0x91, 0xaf,
+    0x6e, 0x00, 0x0b, 0x74, 0x64, 0x9f, 0xb3, 0xc0,
+    0x5d, 0x8f, 0x65, 0x13, 0x9f, 0x0d, 0x65, 0x67
+};
 
 /* USER CODE END PV */
 
@@ -94,7 +104,12 @@ static uint32_t Crc32(const uint8_t* data, size_t size)
   return ~r;
 }
 
-static bool IsApplicationValid(const Metadata_t* metadata)
+static bool InRange(uint32_t val, uint32_t low, uint32_t high)
+{
+  return (val >= low) && (val <= high);
+}
+
+static bool IsMetadataValid(const Metadata_t* metadata)
 {
   const uint32_t fwSignCrc = Crc32(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
   const uint32_t metaSignCrc = Crc32(metadata->metadataSignature, sizeof(metadata->metadataSignature));
@@ -115,12 +130,55 @@ static bool IsApplicationValid(const Metadata_t* metadata)
   printf("Firmware signature CRC32: 0x%lX\r\n", fwSignCrc);
   printf("Metadata signature CRC32: 0x%lX\r\n", metaSignCrc);
 
-  uint32_t sp = *(__IO uint32_t*)metadata->startAddress;
-  //uint32_t pc = *(__IO uint32_t*)(metadata->startAddress + 4);
+  if (0 != strcmp(metaStr, "_M_E_T_A_D_A_T_A"))
+  {
+    return false;
+  }
 
-  const bool stackPointerValid = sp == 0x20030000U;
+  const uint32_t start = metadata->startAddress;
+  const uint32_t end = metadata->startAddress + metadata->firmwareSize;
 
-  return stackPointerValid;
+  if (!InRange(start, FIRST_FLASH_ADDRESS, LAST_FLASH_ADDRESS))
+  {
+    return false;
+  }
+
+  if (!InRange(end, FIRST_FLASH_ADDRESS, LAST_FLASH_ADDRESS))
+  {
+    return false;
+  }
+
+  const uint8_t* sign = metadata->metadataSignature;
+  const uint8_t*  msg = (const uint8_t*)metadata;
+  size_t          len = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
+  
+  if (ed25519_verify(sign, msg, len, PUBLIC_KEY))
+  {
+    return true;
+  }
+  
+  return false;
+}
+
+static bool IsApplicationValid(const Metadata_t* metadata)
+{
+    const uint8_t* sig = metadata->firmwareSignature;
+    const uint8_t* msg = (const uint8_t*)(metadata->startAddress);
+    const size_t   len = metadata->firmwareSize;
+
+    if (ed25519_verify(sig, msg, len, PUBLIC_KEY))
+    {
+      uint32_t sp = *(__IO uint32_t*)metadata->startAddress;
+      uint32_t pc = *(__IO uint32_t*)(metadata->startAddress + 4);
+    
+      const bool stackPointerValid = sp == 0x20030000U;
+      const bool programCounterValid = InRange(pc, FIRST_FLASH_ADDRESS, LAST_FLASH_ADDRESS);
+    
+      return stackPointerValid && programCounterValid;
+    }
+
+    printf("Firmware signature verification failed!\r\n");
+    return false;
 }
 
 static void JumpTo(uint32_t address)
@@ -188,12 +246,21 @@ int main(void)
 
   const Metadata_t* metadata = (const Metadata_t*)(APP_METADATA_ADDRESS);
 
-  if (IsApplicationValid(metadata))
+  if (IsMetadataValid(metadata))
   {
-    JumpTo(metadata->startAddress);
+    if (IsApplicationValid(metadata))
+    {
+      JumpTo(metadata->startAddress);
+    }
+    else
+    {
+      printf("No valid application\r\n");
+    }
   }
-
-  printf("No valid application\r\n");
+  else
+  {
+    printf("No valid metadata\r\n");
+  }
 
   /* USER CODE END 2 */
 
