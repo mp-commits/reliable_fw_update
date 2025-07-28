@@ -24,6 +24,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "tcpserver.h"
+#include "driver_w25qxx.h"
+#include "w25qxx_init.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -383,6 +385,18 @@ void startCommTask(void *argument)
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
   (void)argument;
+
+  w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
+  
+  if (hnd == NULL)
+  {
+    printf("W25Q128_Init failed!\r\n");
+  }
+  else
+  {
+    printf("W25Q128_Init OK!\r\n");
+  }
+
   /* Infinite loop */
   for(;;)
   {

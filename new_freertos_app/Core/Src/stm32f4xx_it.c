@@ -203,5 +203,13 @@ void ETH_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void TIM6_Delay_us(uint32_t us)
+{
+  uint32_t start = __HAL_TIM_GET_COUNTER(&htim6);
 
+  while ((__HAL_TIM_GET_COUNTER(&htim6) - start) < us)
+  {
+    // Busy wait
+  }
+}
 /* USER CODE END 1 */
