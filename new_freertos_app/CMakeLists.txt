@@ -87,15 +87,16 @@ add_custom_target(
 )
 
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
-    COMMAND ${CMAKE_OBJCOPY} -I ihex -O binary
-            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
-            ${CMAKE_CURRENT_BINARY_DIR}/$<TARGET_FILE_BASE_NAME:${CMAKE_PROJECT_NAME}>.bin
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
+    COMMAND hexsign.exe
+            -i ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+            -o ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
+            -k $ENV{FW_SIGNING_KEY}
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
-    COMMENT "Converting HEX to BIN"
+    COMMENT "Signing built HEX file"
 )
 
 add_custom_target(
-    create_bin ALL
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
+    signed_hex_file ALL
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
 )
