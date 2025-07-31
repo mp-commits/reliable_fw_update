@@ -23,7 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "tcpserver.h"
+#include "server.h"
 #include "driver_w25qxx.h"
 #include "w25qxx_init.h"
 /* USER CODE END Includes */
@@ -68,6 +68,20 @@ const osThreadAttr_t blueLedTask_attributes = {
   .priority = (osPriority_t) osPriorityLow,
 };
 /* USER CODE BEGIN PV */
+
+osThreadId_t tcpServerTaskHandle;
+const osThreadAttr_t tcpServer_attributes = {
+  .name = "tcpServerTask",
+  .stack_size = 1024,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+osThreadId_t udpServerTaskHandle;
+const osThreadAttr_t udpServer_attributes = {
+  .name = "udpServerTask",
+  .stack_size = 1024,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* USER CODE END PV */
 
@@ -370,6 +384,11 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void SERVER_NotifyCallback(void)
+{
+  HAL_GPIO_TogglePin(LED_PORT_GREEN, LED_PIN_GREEN);
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_startCommTask */
@@ -386,24 +405,11 @@ void startCommTask(void *argument)
   /* USER CODE BEGIN 5 */
   (void)argument;
 
-  w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
-  
-  if (hnd == NULL)
-  {
-    printf("W25Q128_Init failed!\r\n");
-  }
-  else
-  {
-    printf("W25Q128_Init OK!\r\n");
-  }
+  //tcpServerTaskHandle = osThreadNew(SERVER_TcpEchoTask, NULL, &tcpServer_attributes);
+  udpServerTaskHandle = osThreadNew(SERVER_UdpEchoTask, NULL, &udpServer_attributes);
 
-  /* Infinite loop */
-  for(;;)
-  {
-    tcp_process();
-    HAL_GPIO_TogglePin(LED_PORT_GREEN, LED_PIN_GREEN);
-    osDelay(1);
-  }
+  osDelay(10000);
+  osThreadExit();
   /* USER CODE END 5 */
 }
 
@@ -418,6 +424,17 @@ void startBlueLedTask(void *argument)
 {
   /* USER CODE BEGIN startBlueLedTask */
   (void)argument;
+  w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
+  
+  if (hnd == NULL)
+  {
+    printf("W25Q128_Init failed!\r\n");
+  }
+  else
+  {
+    printf("W25Q128_Init OK!\r\n");
+  }
+
   /* Infinite loop */
   for(;;)
   {
