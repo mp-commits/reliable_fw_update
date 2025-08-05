@@ -50,6 +50,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    Core/Src/driver_w25qxx.c
+    Core/Src/installer.c
+    Core/Src/w25qxx_init.c
 )
 
 # Add include paths

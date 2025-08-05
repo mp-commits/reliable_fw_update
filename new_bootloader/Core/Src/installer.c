@@ -22,7 +22,7 @@
  *
  * -----------------------------------------------------------------------------
  *
- * udpserver.c
+ * installer.c
  *
  * @brief {Short description of the source file}
 */
@@ -31,37 +31,40 @@
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include <string.h>
-#include <stdio.h>
-
-#include "cmsis_os.h"
-
-#include "lwip/sockets.h"
-#include "lwip/inet.h"
-#include "lwip/netdb.h"
-#include "lwip/sys.h"
-#include "lwip/api.h"
-
-#include "bigendian.h"
-#include "crc32.h"
-#include "metadata.h"
-#include "server.h"
-
+#include "installer.h"
 #include "fragmentstore/fragmentstore.h"
-#include "updateserver/transfer.h"
+#include "ed25519.h"
+
+#include <assert.h>
+#include <stdio.h>
 
 /*----------------------------------------------------------------------------*/
 /* PRIVATE TYPE DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
 
+typedef struct
+{
+    FragmentArea_t  fa;         /* Fragment area handle */
+    bool            valid;      /* This slot contains a valid firmware */
+    Metadata_t      metadata;   /* Metadata in the area */
+    Fragment_t      fragMem;    /* Memory allocation for reading */
+} InstallSlot_t;
+
 /*----------------------------------------------------------------------------*/
 /* MACRO DEFINITIONS                                                          */
 /*----------------------------------------------------------------------------*/
 
-#define UDP_PORT 7
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
 #define KB (1024U)
 #define MB (1024U * KB)
+
+#define W25Qxx_SECTOR_SIZE  (4U*KB)
+#define UPDATE_SLOT_SIZE    (2U*MB)
+
+#define SLOT_0_ADDRESS      (0x0U)
+#define SLOT_1_ADDRESS      (UPDATE_SLOT_SIZE)
+#define SLOT_2_ADDRESS      (2U * UPDATE_SLOT_SIZE)
 
 #define REQUIRE(x) \
 if(!(x)) \
@@ -78,29 +81,18 @@ action; \
 return; \
 }
 
-#define SET_ADDRESS(var, address, port) \
-memset(&server_addr, 0, sizeof(server_addr)); \
-server_addr.sin_family = AF_INET; \
-server_addr.sin_port = htons(port); \
-server_addr.sin_addr.s_addr = address;
-
-#define W25Qxx_SECTOR_SIZE (4U*KB)
-#define UPDATE_SLOT_SIZE    (2U*MB)
-
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 
 /*----------------------------------------------------------------------------*/
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
-static UpdateServer_t f_us;
-static TransferBuffer_t f_tb;
-static FragmentArea_t f_fa;
-static uint8_t f_memBlock[5 * 1024];
-static w25qxx_handle_t* f_w25q128 = NULL;
+static InstallSlot_t f_slots[1];
+static w25qxx_handle_t* f_w25q128;
+static InstallerKeys_t f_keys;
 
 /*----------------------------------------------------------------------------*/
-/* PRIVATE FUNCTION DEFINITIONS                                               */
+/* CALLBACKS FOR FRAGMENT AREAS                                               */
 /*----------------------------------------------------------------------------*/
 
 static bool VerifyMemory(Address_t address, size_t size, const uint8_t* cmp)
@@ -206,183 +198,112 @@ bool ValidateFragment(const Fragment_t* frag)
  */
 bool ValidateMetadata(const Metadata_t* metadata)
 {
-    (void)metadata;
-    return true;
+    if (metadata == NULL)
+    {
+        return false;
+    }
+    
+    const uint8_t* msg = (const uint8_t*)metadata;
+    const size_t msgLen = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
+
+    return 1 == ed25519_verify(
+        metadata->metadataSignature, 
+        msg, 
+        msgLen,
+        f_keys.metadataPubKey
+    );
 }
 
-static uint8_t TEST_ReadDataById(
-    uint8_t id, 
-    uint8_t* out, 
-    size_t maxSize, 
-    size_t* readSize)
+/*----------------------------------------------------------------------------*/
+/* PRIVATE FUNCTION DEFINITIONS                                               */
+/*----------------------------------------------------------------------------*/
+
+static bool VerifySlotContent(InstallSlot_t* slot)
 {
-    if (maxSize < 16U)
+    FA_ReturnCode_t res = FA_ReadMetadata(&slot->fa, &slot->metadata);
+    
+    if (res == FA_ERR_OK)
     {
-        return PROTOCOL_NACK_INTERNAL_ERROR;
+        /* TODO: Verify that the integrity of the firmware is valid */
+        return true;
     }
-    switch (id)
-    {
-    case PROTOCOL_DATA_ID_FIRMWARE_VERSION:
-        *readSize = BE_PutU32(out, FIRMWARE_METADATA.version);
-        return PROTOCOL_ACK_OK;
-    case PROTOCOL_DATA_ID_FIRMWARE_TYPE:
-        *readSize = BE_PutU32(out, FIRMWARE_METADATA.type);
-        return PROTOCOL_ACK_OK;
-    case PROTOCOL_DATA_ID_FIRMWARE_NAME:
-        memcpy(out, FIRMWARE_METADATA.name, sizeof(FIRMWARE_METADATA.name));
-        *readSize = sizeof(FIRMWARE_METADATA.name);
-        return PROTOCOL_ACK_OK;
-    default:
-        return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
-    }
+
+    return false;
 }
 
-static uint8_t TEST_WriteDataById(
-    uint8_t id, 
-    const uint8_t* in, 
-    size_t size)
+static bool InstallFrom(InstallSlot_t* slot)
 {
-    printf("Received data id %lu content ", (uint32_t)(id));
-    for (size_t i = 0; i < size; i++)
-    {
-        printf("%lX ", (uint32_t)(in[i]));
-    }
-    printf("\r\n");
-
-    return PROTOCOL_ACK_OK;
-}
-
-static uint8_t TEST_PutMetadata(
-    const uint8_t* data, 
-    size_t size)
-{
-    printf("Received metadata %lX\r\n", InlineCrc32(data, size));
-
-    if (size != sizeof(Metadata_t))
-    {
-        return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
-    }
-
-    FA_ReturnCode_t code =  FA_WriteMetadata(&f_fa, (const Metadata_t*)data);
-
-    if (code == FA_ERR_OK)
-    {
-        printf("Wrote metadata\r\n");
-        return PROTOCOL_ACK_OK;
-    }
-    else if (code == FA_ERR_BUSY)
-    {
-        printf("Write service busy\r\n");
-        return PROTOCOL_NACK_BUSY_REPEAT_REQUEST;
-    }
-    else
-    {
-        printf("Write service failed: %i\r\n", code);
-        return PROTOCOL_NACK_REQUEST_FAILED;
-    }
-}
-
-static uint8_t TEST_PutFragment(
-    const uint8_t* data, 
-    size_t size)
-{
-    printf("Received fragment %lX\r\n", InlineCrc32(data, size));
-
-    if (size != sizeof(Fragment_t))
-    {
-        return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
-    }
-
-    const Fragment_t* frag = (const Fragment_t*)data;
-
-    FA_ReturnCode_t code =  FA_WriteFragment(&f_fa, frag->number, frag);
-
-    if (code == FA_ERR_OK)
-    {
-        printf("Wrote fragment to slot %lu\r\n", frag->number);
-        return PROTOCOL_ACK_OK;
-    }
-    else if (code == FA_ERR_BUSY)
-    {
-        printf("Write service busy\r\n");
-        return PROTOCOL_NACK_BUSY_REPEAT_REQUEST;
-    }
-    else
-    {
-        printf("Write service failed: %i\r\n", code);
-        return PROTOCOL_NACK_REQUEST_FAILED;
-    }
+    /* TODO: Install to system flash */
+    (void)slot;
+    return false;
 }
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC FUNCTION DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
 
-void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
+void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t* keys)
 {
-    f_w25q128 = arg;
-    REQUIRE(f_w25q128 != NULL);
+    REQUIRE(w25q128 != NULL);
+    REQUIRE(keys != NULL);
 
-    static const MemoryConfig_t memConf = {
-        .baseAddress = 0x0,
-        .sectorSize = W25Qxx_SECTOR_SIZE,
-        .memorySize = UPDATE_SLOT_SIZE,
-        .eraseValue = 0xFF,
+    f_w25q128 = w25q128;
+    f_keys = *keys;
 
-        .Reader = ReadMemory,
-        .Writer = WriteMemory,
-        .Eraser = EraseSectors,
+    static const MemoryConfig_t memConfs[] = {
+        {
+            .baseAddress = SLOT_0_ADDRESS,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = UPDATE_SLOT_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        },
+        {
+            .baseAddress = SLOT_1_ADDRESS,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = UPDATE_SLOT_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        },
+        {
+            .baseAddress = SLOT_2_ADDRESS,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = UPDATE_SLOT_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        }
     };
 
-    REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa, &memConf, ValidateFragment, ValidateMetadata));
-    REQUIRE(US_InitServer(&f_us, TEST_ReadDataById, TEST_WriteDataById, TEST_PutMetadata, TEST_PutFragment));
-    REQUIRE(TRANSFER_Init(&f_tb, &f_us, f_memBlock, sizeof(f_memBlock)));
+    _Static_assert(ARRAY_SIZE(f_slots) <= ARRAY_SIZE(memConfs), "Not enough memconfs");
 
-    int sock;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
-    uint8_t packet[1472];
-    int recvLen;
-
-    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    REQUIRE(sock >= 0);
-
-    SET_ADDRESS(server_addr, INADDR_ANY, UDP_PORT);
-    int bindRes = bind(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
-    REQUIRE_ELSE(bindRes >= 0, close(sock));
-
-    printf("UDP update server listening on 192.168.1.50:%d\r\n", UDP_PORT);
-
-    while (1) {
-        recvLen = recvfrom(
-            sock, 
-            (char*)packet, 
-            sizeof(packet), 
-            0,
-            (struct sockaddr *)&client_addr, 
-            &client_addr_len
-        );
-
-        if (recvLen < 0) {
-            perror("recvfrom failed");
-            continue;
+    for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
+    {
+        REQUIRE(FA_ERR_OK == FA_InitStruct(&f_slots[i].fa, &memConfs[i], ValidateFragment, ValidateMetadata));
+        if (VerifySlotContent(&f_slots[i]))
+        {
+            printf("Fragment area at %lX contains a valid firmware\r\n", memConfs[i].baseAddress);
         }
-
-        SERVER_NotifyCallback();
-
-        const size_t resSize = TRANSFER_Process(&f_tb, packet, recvLen, sizeof(packet));
-
-        sendto(
-            sock, 
-            packet, 
-            resSize, 
-            0,
-            (struct sockaddr *)&client_addr, 
-            client_addr_len
-        );
+        else
+        {
+            printf("Fragment area at %lX does not contain a valid firmware\r\n", memConfs[i].baseAddress);
+        }
     }
 
-    close(sock);
 }
 
-/* EoF udpserver.c */
+bool INSTALLER_CheckInstallRequest(void)
+{
+    (void)InstallFrom(&f_slots[0]);
+    return false;
+}
+
+/* EoF installer.c */

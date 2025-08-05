@@ -26,6 +26,8 @@
 #include "string.h"
 #include "ed25519.h"
 #include "fragmentstore/fragmentstore.h"
+#include "installer.h"
+#include "w25qxx_init.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -243,6 +245,24 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   printf("Bootloader initialized\r\n");
+
+  w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
+  if (hnd == NULL)
+  {
+    printf("W25Q128_Init failed!\r\n");
+  }
+  else
+  {
+    printf("W25Q128_Init OK!\r\n");
+  }
+
+  InstallerKeys_t keys = {
+    .metadataPubKey = PUBLIC_KEY,
+    .firmwarePubKey = PUBLIC_KEY,
+    .fragmentPubKey = NULL,
+  };
+
+  INSTALLER_InitAreas(hnd, &keys);
 
   const Metadata_t* metadata = (const Metadata_t*)(APP_METADATA_ADDRESS);
 
