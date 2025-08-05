@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * server.h
+ * metadata.h
  *
- * @brief {Short description of the source file}
+ * @brief Access to metadata of this firmware
 */
 
-#ifndef SERVER_H_
-#define SERVER_H_
+#ifndef METADATA_H_
+#define METADATA_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,35 +38,18 @@ extern "C" {
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "lwip/err.h"
-#include "driver_w25qxx.h"
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC TYPE DEFINITIONS                                                    */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC MACRO DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
+#include "fragmentstore/fragmentstore.h"
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC VARIABLE DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------------*/
-/* PUBLIC FUNCTION DECLARATIONS                                               */
-/*----------------------------------------------------------------------------*/
-
-extern void SERVER_UdpUpdateServer(w25qxx_handle_t* arg);
-
-extern void SERVER_TcpEchoTask(void* arg);
-
-extern void SERVER_NotifyCallback(void);
+extern const Metadata_t FIRMWARE_METADATA;
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF server.h */
+/* EoF metadata.h */
 
-#endif /* SERVER_H_ */
+#endif /* METADATA_H_ */

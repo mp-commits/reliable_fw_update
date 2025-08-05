@@ -69,20 +69,6 @@ const osThreadAttr_t blueLedTask_attributes = {
 };
 /* USER CODE BEGIN PV */
 
-osThreadId_t tcpServerTaskHandle;
-const osThreadAttr_t tcpServer_attributes = {
-  .name = "tcpServerTask",
-  .stack_size = 1024,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-
-osThreadId_t udpServerTaskHandle;
-const osThreadAttr_t udpServer_attributes = {
-  .name = "udpServerTask",
-  .stack_size = 1024,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -403,12 +389,20 @@ void startCommTask(void *argument)
   /* init code for LWIP */
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
+
   (void)argument;
+  w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
+  
+  if (hnd == NULL)
+  {
+    printf("W25Q128_Init failed!\r\n");
+  }
+  else
+  {
+    printf("W25Q128_Init OK!\r\n");
+  }
 
-  //tcpServerTaskHandle = osThreadNew(SERVER_TcpEchoTask, NULL, &tcpServer_attributes);
-  udpServerTaskHandle = osThreadNew(SERVER_UdpEchoTask, NULL, &udpServer_attributes);
-
-  osDelay(10000);
+  SERVER_UdpUpdateServer(hnd);
   osThreadExit();
   /* USER CODE END 5 */
 }
@@ -424,16 +418,7 @@ void startBlueLedTask(void *argument)
 {
   /* USER CODE BEGIN startBlueLedTask */
   (void)argument;
-  w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
   
-  if (hnd == NULL)
-  {
-    printf("W25Q128_Init failed!\r\n");
-  }
-  else
-  {
-    printf("W25Q128_Init OK!\r\n");
-  }
 
   /* Infinite loop */
   for(;;)

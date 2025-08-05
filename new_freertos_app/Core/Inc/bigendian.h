@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * server.h
+ * bigendian.h
  *
- * @brief {Short description of the source file}
+ * @brief Bigendian decode and encode functions
 */
 
-#ifndef SERVER_H_
-#define SERVER_H_
+#ifndef BIGENDIAN_H_
+#define BIGENDIAN_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,35 +38,23 @@ extern "C" {
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "lwip/err.h"
-#include "driver_w25qxx.h"
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC TYPE DEFINITIONS                                                    */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC MACRO DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC VARIABLE DEFINITIONS                                                */
-/*----------------------------------------------------------------------------*/
+#include <stdint.h>
+#include <stddef.h>
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC FUNCTION DECLARATIONS                                               */
 /*----------------------------------------------------------------------------*/
 
-extern void SERVER_UdpUpdateServer(w25qxx_handle_t* arg);
-
-extern void SERVER_TcpEchoTask(void* arg);
-
-extern void SERVER_NotifyCallback(void);
+/** Encode 32-bit value in big endian byte order
+ *
+ * @return Bytes written to buf (4)
+ */
+extern size_t BE_PutU32(uint8_t* buf, uint32_t val);
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF server.h */
+/* EoF bigendian.h */
 
-#endif /* SERVER_H_ */
+#endif /* BIGENDIAN_H_ */

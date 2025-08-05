@@ -24,19 +24,15 @@
  *
  * metadata.c
  *
- * @brief {Short description of the source file}
+ * @brief Metadata of this firmware version. Signatures are generated after build
 */
 
 /*----------------------------------------------------------------------------*/
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "fragmentstore/fragmentstore.h"
+#include "metadata.h"
 #include <assert.h>
-
-/*----------------------------------------------------------------------------*/
-/* PRIVATE TYPE DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 /* MACRO DEFINITIONS                                                          */
@@ -58,7 +54,7 @@
 
 extern const uint32_t ISR_VECTOR_START[];
 
-static const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
+const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
 {
     .magic = "_M_E_T_A_D_A_T_A",
     .type = 0xA5A5A5A5U,
@@ -73,14 +69,5 @@ static const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata")))
 };
 
 _Static_assert(sizeof(FIRMWARE_METADATA) <= 0x200U, "Metadata too large");
-
-/*----------------------------------------------------------------------------*/
-/* PRIVATE FUNCTION DEFINITIONS                                               */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC FUNCTION DEFINITIONS                                                */
-/*----------------------------------------------------------------------------*/
-
 
 /* EoF metadata.c */

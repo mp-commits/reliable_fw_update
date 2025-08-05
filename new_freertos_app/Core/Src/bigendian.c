@@ -22,51 +22,29 @@
  *
  * -----------------------------------------------------------------------------
  *
- * server.h
+ * bigendian.c
  *
- * @brief {Short description of the source file}
+ * @brief Functions to handle big endian byte order encoding
 */
-
-#ifndef SERVER_H_
-#define SERVER_H_
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*----------------------------------------------------------------------------*/
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "lwip/err.h"
-#include "driver_w25qxx.h"
+#include "bigendian.h"
 
 /*----------------------------------------------------------------------------*/
-/* PUBLIC TYPE DEFINITIONS                                                    */
+/* PUBLIC FUNCTION DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------------*/
-/* PUBLIC MACRO DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
+size_t BE_PutU32(uint8_t* buf, uint32_t val)
+{
+    buf[0] = (uint8_t)(val >> 24U);
+    buf[1] = (uint8_t)(val >> 16U);
+    buf[2] = (uint8_t)(val >> 8U);
+    buf[3] = (uint8_t)(val);
 
-/*----------------------------------------------------------------------------*/
-/* PUBLIC VARIABLE DEFINITIONS                                                */
-/*----------------------------------------------------------------------------*/
+    return 4U;
+}
 
-/*----------------------------------------------------------------------------*/
-/* PUBLIC FUNCTION DECLARATIONS                                               */
-/*----------------------------------------------------------------------------*/
-
-extern void SERVER_UdpUpdateServer(w25qxx_handle_t* arg);
-
-extern void SERVER_TcpEchoTask(void* arg);
-
-extern void SERVER_NotifyCallback(void);
-
-#ifdef __cplusplus
-} /* extern C */
-#endif
-
-/* EoF server.h */
-
-#endif /* SERVER_H_ */
+/* EoF bigendian.c */

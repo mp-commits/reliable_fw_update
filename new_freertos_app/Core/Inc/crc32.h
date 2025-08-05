@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * server.h
+ * crc32.h
  *
- * @brief {Short description of the source file}
+ * @brief Simple and slow CRC32 function
 */
 
-#ifndef SERVER_H_
-#define SERVER_H_
+#ifndef CRC32_H_
+#define CRC32_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,35 +38,33 @@ extern "C" {
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "lwip/err.h"
-#include "driver_w25qxx.h"
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC TYPE DEFINITIONS                                                    */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC MACRO DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC VARIABLE DEFINITIONS                                                */
-/*----------------------------------------------------------------------------*/
+#include <stdint.h>
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC FUNCTION DECLARATIONS                                               */
 /*----------------------------------------------------------------------------*/
 
-extern void SERVER_UdpUpdateServer(w25qxx_handle_t* arg);
-
-extern void SERVER_TcpEchoTask(void* arg);
-
-extern void SERVER_NotifyCallback(void);
+static inline uint32_t InlineCrc32(const uint8_t* data, size_t size)
+{
+  uint32_t r = ~0; const uint8_t *end = data + size;
+ 
+  while(data < end)
+  {
+    r ^= *data++;
+ 
+    for(int i = 0; i < 8; i++)
+    {
+      uint32_t t = ~((r&1) - 1); r = (r>>1) ^ (0xEDB88320 & t);
+    }
+  }
+ 
+  return ~r;
+}
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF server.h */
+/* EoF crc32.h */
 
-#endif /* SERVER_H_ */
+#endif /* CRC32_H_ */
