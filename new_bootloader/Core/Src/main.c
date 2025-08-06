@@ -28,6 +28,7 @@
 #include "fragmentstore/fragmentstore.h"
 #include "installer.h"
 #include "w25qxx_init.h"
+#include "delay.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -292,9 +293,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
     HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); // red LED
     HAL_Delay(500);
+    /* USER CODE END WHILE */
+    
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -424,7 +426,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM1_Init 2 */
-
+  HAL_TIM_Base_Start(&htim1);
   /* USER CODE END TIM1_Init 2 */
 
 }
@@ -534,6 +536,20 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void DELAY_us(uint16_t us)
+{
+  __HAL_TIM_SET_COUNTER(&htim1,0);
+	while (__HAL_TIM_GET_COUNTER(&htim1) < us);
+}
+
+void DELAY_ms(uint32_t ms)
+{
+  for (uint32_t i = 0; i < ms; i++)
+  {
+    DELAY_us(1000U);
+  }
+}
 
 /* USER CODE END 4 */
 

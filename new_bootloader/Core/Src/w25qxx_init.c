@@ -33,6 +33,7 @@
 
 #include "w25qxx_init.h"
 #include "stm32f4xx_it.h"
+#include "delay.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -144,15 +145,19 @@ uint8_t W25QXX_INT_SpiWriteRead(uint8_t instruction, uint8_t instruction_line,
 
 void W25QXX_INT_Delay_ms(uint32_t ms)
 {
-    for (uint32_t i = 0; i < ms; i++)
-    {
-        // TODO: TIM6_Delay_us(1000U);
-    }
+    DELAY_ms(ms);
 }
 
 void W25QXX_INT_Delay_us(uint32_t us)
 {
-    // TODO: TIM6_Delay_us(us);
+    while (us > 1000U)
+    {
+        W25QXX_INT_Delay_ms(1);
+        us -= 1000U;
+    }
+
+    /* us is now <= 1000. Safe to cast to U16 delay type */
+    DELAY_us(us);
 }
 
 void W25QXX_INT_DebugPrint(const char* const fmt, ...)
