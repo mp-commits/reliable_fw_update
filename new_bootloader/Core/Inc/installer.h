@@ -69,6 +69,8 @@ extern void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t*
 
 extern bool INSTALLER_CheckInstallRequest(void);
 
+extern bool INSTALLER_TryRepair(void);
+
 #ifdef __cplusplus
 } /* extern C */
 #endif

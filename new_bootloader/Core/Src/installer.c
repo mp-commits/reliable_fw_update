@@ -31,12 +31,16 @@
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
+#include "main.h"
 #include "installer.h"
 #include "fragmentstore/fragmentstore.h"
 #include "ed25519.h"
+#include "ed25519_extra.h"
 
 #include <assert.h>
 #include <stdio.h>
+
+#include "stm32f4xx_hal.h"
 
 /*----------------------------------------------------------------------------*/
 /* PRIVATE TYPE DEFINITIONS                                                   */
@@ -46,15 +50,24 @@ typedef struct
 {
     FragmentArea_t  fa;         /* Fragment area handle */
     bool            valid;      /* This slot contains a valid firmware */
+    uint32_t        highestAddr;/* Highest address of this firmware */
     Metadata_t      metadata;   /* Metadata in the area */
     Fragment_t      fragMem;    /* Memory allocation for reading */
 } InstallSlot_t;
+
+typedef struct
+{
+    uint32_t startAddress;
+    size_t   size;
+    uint32_t handle;
+} Stm32FlashSector_t;
 
 /*----------------------------------------------------------------------------*/
 /* MACRO DEFINITIONS                                                          */
 /*----------------------------------------------------------------------------*/
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#define member_size(type, member) (sizeof( ((type *)0)->member ))
 
 #define KB (1024U)
 #define MB (1024U * KB)
@@ -90,6 +103,38 @@ return; \
 static InstallSlot_t f_slots[1];
 static w25qxx_handle_t* f_w25q128;
 static InstallerKeys_t f_keys;
+
+static const Stm32FlashSector_t f_FLASH_SECTORS[FLASH_SECTOR_TOTAL] = {
+    {0x08000000,  16U*KB, FLASH_SECTOR_0 },
+    {0x08004000,  16U*KB, FLASH_SECTOR_1 },
+    {0x08008000,  16U*KB, FLASH_SECTOR_2 },
+    {0x0800C000,  16U*KB, FLASH_SECTOR_3 },
+    {0x08010000,  64U*KB, FLASH_SECTOR_4 },
+    {0x08020000, 128U*KB, FLASH_SECTOR_5 },
+    {0x08040000, 128U*KB, FLASH_SECTOR_6 },
+    {0x08060000, 128U*KB, FLASH_SECTOR_7 },
+    {0x08080000, 128U*KB, FLASH_SECTOR_8 },
+    {0x080A0000, 128U*KB, FLASH_SECTOR_9 },
+    {0x080C0000, 128U*KB, FLASH_SECTOR_10 },
+    {0x080E0000, 128U*KB, FLASH_SECTOR_11 },
+    {0x08100000,  16U*KB, FLASH_SECTOR_12 },
+    {0x08104000,  16U*KB, FLASH_SECTOR_13 },
+    {0x08108000,  16U*KB, FLASH_SECTOR_14 },
+    {0x0810C000,  16U*KB, FLASH_SECTOR_15 },
+    {0x08110000,  64U*KB, FLASH_SECTOR_16 },
+    {0x08120000, 128U*KB, FLASH_SECTOR_17 },
+    {0x08140000, 128U*KB, FLASH_SECTOR_18 },
+    {0x08160000, 128U*KB, FLASH_SECTOR_19 },
+    {0x08180000, 128U*KB, FLASH_SECTOR_20 },
+    {0x081A0000, 128U*KB, FLASH_SECTOR_21 },
+    {0x081C0000, 128U*KB, FLASH_SECTOR_22 },
+    {0x081E0000, 128U*KB, FLASH_SECTOR_23 },
+};
+
+static_assert(ARRAY_SIZE(f_FLASH_SECTORS) == FLASH_SECTOR_TOTAL, "Incomplete sector map");
+
+static_assert((sizeof(Metadata_t) % sizeof(uint32_t)) == 0U, "Metadata not word aligned");
+static_assert((member_size(Fragment_t, content) % sizeof(uint32_t)) == 0U, "Fragment content not word aligned");
 
 /*----------------------------------------------------------------------------*/
 /* CALLBACKS FOR FRAGMENT AREAS                                               */
@@ -220,22 +265,282 @@ bool ValidateMetadata(const Metadata_t* metadata)
 
 static bool VerifySlotContent(InstallSlot_t* slot)
 {
-    FA_ReturnCode_t res = FA_ReadMetadata(&slot->fa, &slot->metadata);
+    Metadata_t* meta = &slot->metadata;
+    Fragment_t* frag = &slot->fragMem;
+
+    FA_ReturnCode_t res = FA_ReadMetadata(&slot->fa, meta);
     
     if (res == FA_ERR_OK)
     {
-        /* TODO: Verify that the integrity of the firmware is valid */
+        ed25519_multipart_t ctx;
+        int ed = ed25519_multipart_init(
+            &ctx, 
+            meta->firmwareSignature, 
+            f_keys.firmwarePubKey
+        );
+
+        if (ed != 1U)
+        {
+            printf("ed25519_multipart_init failed");
+            return false;
+        }
+
+        size_t lastIdx = 0U;
+        res = FA_FindLastFragment(&slot->fa, frag, &lastIdx);
+
+        if (res != FA_ERR_OK)
+        {
+            printf("FA_FindLastFragment failed!\r\n");
+            return false;
+        }
+
+        uint32_t nextStart = FIRST_FLASH_ADDRESS;
+
+        for (size_t i = 0; i <= lastIdx; i++)
+        {
+            res = FA_ReadFragment(&slot->fa, i, frag);
+            if (res != FA_ERR_OK)
+            {
+                printf("Fragment %u was not valid\r\n", i);
+                return false;
+            }
+
+            if (frag->startAddress != nextStart)
+            {
+                printf("Fragment %u: unexpected start address: %lX, expected %lX\r\n", i, frag->startAddress, nextStart);
+                return false;
+            }
+            else
+            {
+                nextStart += frag->size;
+            }
+
+            uint32_t verifyOffset = 0U;
+            size_t   verifyLen = frag->size;
+
+            if (frag->startAddress < meta->startAddress)
+            {
+                //printf("Fragment %u is ahead of actual start address\r\n", i);
+                verifyOffset = meta->startAddress - frag->startAddress;
+            }
+
+            if (verifyOffset < verifyLen)
+            {
+                verifyLen -= verifyOffset;
+            }
+
+            if (verifyLen > 0U)
+            {
+                ed = ed25519_multipart_continue(&ctx, &frag->content[verifyOffset], verifyLen);
+                if (ed != 1U)
+                {
+                    printf("ed25519_multipart_continue failed\r\n");
+                    return false;
+                }
+            }
+
+            const uint32_t fragEndAddr = frag->startAddress + frag->size;
+            if (fragEndAddr > slot->highestAddr)
+            {
+                slot->highestAddr = fragEndAddr;
+            }
+
+            //printf("Fragment %u is valid\r\n", i);
+        }
+
+        ed = ed25519_multipart_end(&ctx);
+        if (ed != 1U)
+        {
+            printf("ed25519_multipart_end failed\r\n");
+            return false;
+        }
+
+        slot->valid = true;
         return true;
     }
 
     return false;
 }
 
+static inline bool InRange(uint32_t val, uint32_t low, uint32_t high)
+{
+    return (val >= low) && (val <= high);
+}
+
+static bool EraseRequiredSectors(uint32_t startAddress, uint32_t endAddress)
+{
+    bool eraseActive = false;
+
+    for (size_t i = 0; i < FLASH_SECTOR_TOTAL; i++)
+    {
+        const Stm32FlashSector_t* sec = &f_FLASH_SECTORS[i];
+
+        const uint32_t secStart = sec->startAddress;
+        const uint32_t secEnd = sec->startAddress + sec->size - 1U;
+
+        if (InRange(startAddress, secStart, secEnd))
+        {
+            eraseActive = true;
+        }
+
+        if (eraseActive)
+        {
+            printf("Erasing sector %lu\r\n", sec->handle);
+
+            
+            FLASH_EraseInitTypeDef eraseInitStruct;
+            uint32_t error = 0;
+            
+            eraseInitStruct.TypeErase    = FLASH_TYPEERASE_SECTORS;
+            eraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3; // 2.7V to 3.6V
+            eraseInitStruct.Sector       = sec->handle;
+            eraseInitStruct.NbSectors    = 1;
+            
+            HAL_FLASH_Unlock();
+            HAL_StatusTypeDef status = HAL_FLASHEx_Erase(&eraseInitStruct, &error);
+            HAL_FLASH_Lock();
+
+            if (status != HAL_OK)
+            {
+                printf("Sector erase failed error code %lu\r\n", error);
+                return false;
+            }
+        }
+
+        if (InRange(endAddress, secStart, secEnd))
+        {
+            eraseActive = false;
+            break;
+        }
+    }
+
+    return true;
+}
+
+static inline bool FlashAligned(uint32_t val)
+{
+    return (val & ~0xFFFFFFFCU) == 0U;
+}
+
+static inline uint32_t FlashAlignLow(uint32_t val)
+{
+    return val & 0xFFFFFFFCU;
+}
+
+static inline uint32_t FlashAlignHigh(uint32_t val)
+{
+    while(!FlashAligned(val))
+    {
+        val++;
+    }
+
+    return val;
+}
+
+static bool ProgramFlash(uint32_t address, const uint8_t* data, size_t size)
+{
+    printf("Programming %u bytes to address %08lX\r\n", size, address);
+    uint32_t startAddress = address;
+    uint32_t endAddress = address + size;
+
+    if (!InRange(startAddress, APP_METADATA_ADDRESS, LAST_FLASH_ADDRESS) ||
+        !InRange(endAddress, APP_METADATA_ADDRESS, LAST_FLASH_ADDRESS))
+    {
+        printf("Write request exceeds flash boundaries!\r\n");
+        return false;
+    }
+
+    HAL_FLASH_Unlock();
+
+    uint32_t startWord = FlashAlignHigh(startAddress);
+    uint32_t endWord = FlashAlignLow(endAddress);
+    uint32_t i = 0U;
+
+    for (uint32_t addr = startAddress; addr < startWord; addr++)
+    {
+        HAL_StatusTypeDef status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, addr, data[i]);
+        i++;
+        
+        if (status != HAL_OK)
+        {
+            printf("HAL_FLASH_Program failed with status %i\r\n", (int)status);
+            HAL_FLASH_Lock();
+            return false;
+        }
+    }
+
+    for (uint32_t addr = startWord; addr < endWord; addr += 4U)
+    {
+        const uint32_t* word = (const uint32_t*)(&data[i]);
+        HAL_StatusTypeDef status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, *word);
+        i += 4U;
+        
+        if (status != HAL_OK)
+        {
+            printf("HAL_FLASH_Program failed with status %i\r\n", (int)status);
+            HAL_FLASH_Lock();
+            return false;
+        }
+    }
+
+    for (uint32_t addr = endWord; addr < endAddress; addr++)
+    {
+        HAL_StatusTypeDef status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, addr, data[i]);
+        i++;
+        
+        if (status != HAL_OK)
+        {
+            printf("HAL_FLASH_Program failed with status %i\r\n", (int)status);
+            HAL_FLASH_Lock();
+            return false;
+        }
+    }
+
+    HAL_FLASH_Lock();
+    return true;
+}
+
 static bool InstallFrom(InstallSlot_t* slot)
 {
-    /* TODO: Install to system flash */
-    (void)slot;
-    return false;
+    Metadata_t* meta = &slot->metadata;
+    Fragment_t* frag = &slot->fragMem;
+
+    size_t lastIdx = 0U;
+    FA_ReturnCode_t res = FA_FindLastFragment(&slot->fa, frag, &lastIdx);
+
+    if (res != FA_ERR_OK)
+    {
+        printf("FA_FindLastFragment failed!\r\n");
+        return false;
+    }
+
+    if (!EraseRequiredSectors(APP_METADATA_ADDRESS, slot->highestAddr))
+    {
+        return false;
+    }
+
+    if (!ProgramFlash(APP_METADATA_ADDRESS, (const uint8_t*)meta, sizeof(Metadata_t)))
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i <= lastIdx; i++)
+    {
+        FA_ReturnCode_t res = FA_ReadFragment(&slot->fa, i, frag);
+
+        if (res != FA_ERR_OK)
+        {
+            printf("FA_ReadFragment failed!\r\n");
+            return false;
+        }
+
+        if (!ProgramFlash(frag->startAddress, frag->content, frag->size))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -302,7 +607,17 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t* keys)
 
 bool INSTALLER_CheckInstallRequest(void)
 {
-    (void)InstallFrom(&f_slots[0]);
+    if (f_slots[0].valid)
+    {
+        printf("Installing firmware from slot %i\r\n", 0);
+        return InstallFrom(&f_slots[0]);
+    }
+
+    return false;
+}
+
+bool INSTALLER_TryRepair(void)
+{
     return false;
 }
 

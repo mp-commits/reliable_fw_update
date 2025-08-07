@@ -38,9 +38,7 @@ typedef void (*pFunction)(void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_METADATA_ADDRESS  0x08010000U
-#define FIRST_FLASH_ADDRESS   (APP_METADATA_ADDRESS + sizeof(Metadata_t))
-#define LAST_FLASH_ADDRESS    (0x82000000U)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -117,6 +115,15 @@ static bool InRange(uint32_t val, uint32_t low, uint32_t high)
 
 static bool IsMetadataValid(const Metadata_t* metadata)
 {
+  const uint8_t* sign = metadata->metadataSignature;
+  const uint8_t*  msg = (const uint8_t*)metadata;
+  size_t          len = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
+  
+  if (1 != ed25519_verify(sign, msg, len, PUBLIC_KEY))
+  {
+    return false;
+  }
+
   const uint32_t fwSignCrc = Crc32(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
   const uint32_t metaSignCrc = Crc32(metadata->metadataSignature, sizeof(metadata->metadataSignature));
 
@@ -154,16 +161,7 @@ static bool IsMetadataValid(const Metadata_t* metadata)
     return false;
   }
 
-  const uint8_t* sign = metadata->metadataSignature;
-  const uint8_t*  msg = (const uint8_t*)metadata;
-  size_t          len = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
-  
-  if (ed25519_verify(sign, msg, len, PUBLIC_KEY))
-  {
-    return true;
-  }
-  
-  return false;
+  return true;
 }
 
 static bool IsApplicationValid(const Metadata_t* metadata)
@@ -269,6 +267,11 @@ int main(void)
 
   INSTALLER_InitAreas(hnd, &keys);
 
+  if (!INSTALLER_CheckInstallRequest())
+  {
+    printf("No install requirements\r\n");
+  }
+
   const Metadata_t* metadata = (const Metadata_t*)(APP_METADATA_ADDRESS);
 
   if (IsMetadataValid(metadata))
@@ -285,6 +288,16 @@ int main(void)
   else
   {
     printf("No valid metadata\r\n");
+  }
+
+  if (INSTALLER_TryRepair())
+  {
+    // TODO: Perform reset
+    printf("Firmware repaired!\r\n");
+  }
+  else
+  {
+    printf("Unable to repair firmware!\r\n");
   }
 
   /* USER CODE END 2 */
