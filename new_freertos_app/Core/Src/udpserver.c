@@ -48,6 +48,7 @@
 #include "server.h"
 
 #include "fragmentstore/fragmentstore.h"
+#include "fragmentstore/command.h"
 #include "updateserver/transfer.h"
 
 /*----------------------------------------------------------------------------*/
@@ -96,6 +97,7 @@ server_addr.sin_addr.s_addr = address;
 static UpdateServer_t f_us;
 static TransferBuffer_t f_tb;
 static FragmentArea_t f_fa;
+static CommandArea_t f_ca;
 static uint8_t f_memBlock[5 * 1024];
 static w25qxx_handle_t* f_w25q128 = NULL;
 
@@ -242,14 +244,31 @@ static uint8_t TEST_WriteDataById(
     const uint8_t* in, 
     size_t size)
 {
-    printf("Received data id %lu content ", (uint32_t)(id));
-    for (size_t i = 0; i < size; i++)
+    switch (id)
     {
-        printf("%lX ", (uint32_t)(in[i]));
-    }
-    printf("\r\n");
+    case PROTOCOL_DATA_ID_FIRMWARE_UPDATE:
+        if (size != sizeof(Metadata_t))
+        {
+            printf("Invalid update command size: %u\r\n", size);
+            return PROTOCOL_NACK_INVALID_REQUEST;
+        }
+        printf("Received update metadata %lX\r\n", InlineCrc32(in, size));
+        const Metadata_t* metadata = (const Metadata_t*)in;
+        if (!ValidateMetadata(metadata))
+        {
+            printf("Update metadata validity check failed!\r\n");
+            return PROTOCOL_NACK_INVALID_REQUEST;
+        }
+        if (!CA_WriteInstallCommand(&f_ca, COMMAND_TYPE_INSTALL_FIRMWARE, metadata))
+        {
+            printf("Writing update command failed!\r\n");
+            return PROTOCOL_NACK_BUSY_REPEAT_REQUEST;
+        }
+        return PROTOCOL_ACK_OK;
 
-    return PROTOCOL_ACK_OK;
+    default:
+        return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
+    }
 }
 
 static uint8_t TEST_PutMetadata(
@@ -323,18 +342,55 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
     f_w25q128 = arg;
     REQUIRE(f_w25q128 != NULL);
 
-    static const MemoryConfig_t memConf = {
-        .baseAddress = 0x0,
-        .sectorSize = W25Qxx_SECTOR_SIZE,
-        .memorySize = UPDATE_SLOT_SIZE,
-        .eraseValue = 0xFF,
+    static const MemoryConfig_t memConf[4] = {
+        // Fragment area 0
+        {
+            .baseAddress = 0x0,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = UPDATE_SLOT_SIZE,
+            .eraseValue = 0xFF,
 
-        .Reader = ReadMemory,
-        .Writer = WriteMemory,
-        .Eraser = EraseSectors,
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        },
+        // Fragment area 1
+        {
+            .baseAddress = UPDATE_SLOT_SIZE,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = UPDATE_SLOT_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        },
+        // Fragment area 2
+        {
+            .baseAddress = 2U * UPDATE_SLOT_SIZE,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = UPDATE_SLOT_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        },
+        // Update command area
+        {
+            .baseAddress = 3U * UPDATE_SLOT_SIZE,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = 3U * W25Qxx_SECTOR_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
+        },
     };
 
-    REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa, &memConf, ValidateFragment, ValidateMetadata));
+    REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa, &memConf[0], ValidateFragment, ValidateMetadata));
+    REQUIRE(CA_InitStruct(&f_ca, &memConf[3], &InlineCrc32));
     REQUIRE(US_InitServer(&f_us, TEST_ReadDataById, TEST_WriteDataById, TEST_PutMetadata, TEST_PutFragment));
     REQUIRE(TRANSFER_Init(&f_tb, &f_us, f_memBlock, sizeof(f_memBlock)));
 
