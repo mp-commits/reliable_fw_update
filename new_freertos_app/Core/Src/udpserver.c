@@ -266,6 +266,34 @@ static uint8_t TEST_WriteDataById(
         }
         return PROTOCOL_ACK_OK;
 
+    case PROTOCOL_DATA_ID_FIRMWARE_ROLLBACK:
+        if (size == sizeof(Metadata_t))
+        {
+            printf("Received specific rollback command to %lx\r\n", InlineCrc32(in, size));
+            const Metadata_t* metadata = (const Metadata_t*)in;
+            if (!ValidateMetadata(metadata))
+            {
+                printf("Rollback metadata validity check failed!\r\n");
+                return PROTOCOL_NACK_INVALID_REQUEST;
+            }
+            if (!CA_WriteInstallCommand(&f_ca, COMMAND_TYPE_ROLLBACK, metadata))
+            {
+                printf("Writing rollback command failed!\r\n");
+                return PROTOCOL_NACK_BUSY_REPEAT_REQUEST;
+            }
+        }
+        else
+        {
+            printf("Received unspecific rollback command\r\n");
+            if (!CA_WriteInstallCommand(&f_ca, COMMAND_TYPE_ROLLBACK, NULL))
+            {
+                printf("Writing rollback command failed!\r\n");
+                return PROTOCOL_NACK_BUSY_REPEAT_REQUEST;
+            }
+        }
+
+        return PROTOCOL_ACK_OK;
+
     default:
         return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
     }

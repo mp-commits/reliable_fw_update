@@ -32,7 +32,9 @@
 /*----------------------------------------------------------------------------*/
 
 #include "main.h"
+#include "crc32.h"
 #include "installer.h"
+#include "fragmentstore/command.h"
 #include "fragmentstore/fragmentstore.h"
 #include "ed25519.h"
 #include "ed25519_extra.h"
@@ -75,23 +77,23 @@ typedef struct
 #define W25Qxx_SECTOR_SIZE  (4U*KB)
 #define UPDATE_SLOT_SIZE    (2U*MB)
 
-#define SLOT_0_ADDRESS      (0x0U)
-#define SLOT_1_ADDRESS      (UPDATE_SLOT_SIZE)
-#define SLOT_2_ADDRESS      (2U * UPDATE_SLOT_SIZE)
+#define SLOT_0_ADDRESS          (0x0U)
+#define SLOT_1_ADDRESS          (UPDATE_SLOT_SIZE)
+#define SLOT_2_ADDRESS          (2U * UPDATE_SLOT_SIZE)
+#define COMMAND_AREA_ADDRESS    (3U * UPDATE_SLOT_SIZE)
 
-#define REQUIRE(x) \
+#define REQUIRE_V(x) \
 if(!(x)) \
 { \
 printf("%s failed!\r\n", #x);\
 return; \
 }
 
-#define REQUIRE_ELSE(x, action) \
+#define REQUIRE_B(x) \
 if(!(x)) \
 { \
 printf("%s failed!\r\n", #x);\
-action; \
-return; \
+return false; \
 }
 
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
@@ -100,6 +102,7 @@ return; \
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
+static CommandArea_t f_ca;
 static InstallSlot_t f_slots[1];
 static w25qxx_handle_t* f_w25q128;
 static InstallerKeys_t f_keys;
@@ -502,6 +505,11 @@ static bool ProgramFlash(uint32_t address, const uint8_t* data, size_t size)
 
 static bool InstallFrom(InstallSlot_t* slot)
 {
+    if (!slot->valid)
+    {
+        return false;
+    }
+
     Metadata_t* meta = &slot->metadata;
     Fragment_t* frag = &slot->fragMem;
 
@@ -543,14 +551,159 @@ static bool InstallFrom(InstallSlot_t* slot)
     return true;
 }
 
+static bool EmptyMetadata(const Metadata_t* m)
+{
+    const uint8_t* buf = (const uint8_t*)m;
+    for (size_t i = 0; i < sizeof(Metadata_t); i++)
+    {
+        if (buf[i] != 0x0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool ExecuteInstallCommand(const Metadata_t* metaArg)
+{
+    CommandStatus_t status = CA_GetStatus(&f_ca);
+
+    if (status == COMMAND_STATE_FAILED)
+    {
+        printf("Install request has failed before. Quitting!\r\n");
+        return false;
+    }
+    
+    InstallSlot_t* slot = NULL;
+    
+    for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
+    {
+        if (f_slots[i].valid && 
+            (0 == memcmp(metaArg, &f_slots[i].metadata, sizeof(Metadata_t))))
+        {
+            slot = &f_slots[i];
+            printf("Found target firmware from slot %u\r\n", i);
+            break;
+        }
+    }
+    
+    if (slot == NULL)
+    {
+        printf("Target firmware not found! Install failed!\r\n");
+        REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
+        return false;
+    }
+    
+    if (status == COMMAND_STATE_NONE)
+    {
+        REQUIRE_B(CA_WriteHistory(&f_ca, (const Metadata_t*)APP_METADATA_ADDRESS));
+        REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_HISTORY_WRITTEN));
+        status = COMMAND_STATE_HISTORY_WRITTEN;
+        printf("History written\r\n");
+    }
+
+    if (status == COMMAND_STATE_HISTORY_WRITTEN)
+    {
+        if (InstallFrom(slot))
+        {
+            REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FIRMWARE_WRITTEN));
+            status = COMMAND_STATE_FIRMWARE_WRITTEN;
+        }
+        else
+        {
+            printf("Installation from slot failed!\r\n");
+            REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
+            return false;
+        }
+    }
+
+    if (status == COMMAND_STATE_FIRMWARE_WRITTEN)
+    {
+        return CA_EraseInstallCommand(&f_ca);
+    }
+
+    return false;
+}
+
+static bool ExecuteRollbackCommand(Metadata_t* metaArg)
+{
+    CommandStatus_t status = CA_GetStatus(&f_ca);
+
+    if (status == COMMAND_STATE_FAILED)
+    {
+        printf("Rollback request has failed before. Quitting!\r\n");
+        return false;
+    }
+
+    InstallSlot_t* slot = NULL;
+    
+    if (EmptyMetadata(metaArg))
+    {
+        if (!CA_ReadHistory(&f_ca, metaArg))
+        {
+            printf("Cannot read previous firmware! Rollback failed!\r\n");
+            REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
+    {
+        if (f_slots[i].valid && 
+            (0 == memcmp(metaArg, &f_slots[i].metadata, sizeof(Metadata_t))))
+        {
+            slot = &f_slots[i];
+            printf("Found rollback firmware from slot %u\r\n", i);
+            break;
+        }
+    }
+
+    if (slot == NULL)
+    {
+        printf("Target rollback firmware not found! Install failed!\r\n");
+        REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
+        return false;
+    }
+
+    if (status == COMMAND_STATE_NONE)
+    {
+        // Do not actually update the history state
+        REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_HISTORY_WRITTEN));
+        status = COMMAND_STATE_HISTORY_WRITTEN;
+        printf("History state set. History not updated\r\n");
+    }
+
+    if (status == COMMAND_STATE_HISTORY_WRITTEN)
+    {
+        if (InstallFrom(slot))
+        {
+            REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FIRMWARE_WRITTEN));
+            status = COMMAND_STATE_FIRMWARE_WRITTEN;
+        }
+        else
+        {
+            printf("Installation from slot failed!\r\n");
+            REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
+            return false;
+        }
+    }
+
+    if (status == COMMAND_STATE_FIRMWARE_WRITTEN)
+    {
+        return CA_EraseInstallCommand(&f_ca);
+    }
+
+    return false;
+}
+
 /*----------------------------------------------------------------------------*/
 /* PUBLIC FUNCTION DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
 
 void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t* keys)
 {
-    REQUIRE(w25q128 != NULL);
-    REQUIRE(keys != NULL);
+    REQUIRE_V(w25q128 != NULL);
+    REQUIRE_V(keys != NULL);
 
     f_w25q128 = w25q128;
     f_keys = *keys;
@@ -585,14 +738,26 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t* keys)
             .Reader = ReadMemory,
             .Writer = WriteMemory,
             .Eraser = EraseSectors,
+        },
+        {
+            .baseAddress = COMMAND_AREA_ADDRESS,
+            .sectorSize = W25Qxx_SECTOR_SIZE,
+            .memorySize = 3U * W25Qxx_SECTOR_SIZE,
+            .eraseValue = 0xFF,
+
+            .Reader = ReadMemory,
+            .Writer = WriteMemory,
+            .Eraser = EraseSectors,
         }
     };
 
-    _Static_assert(ARRAY_SIZE(f_slots) <= ARRAY_SIZE(memConfs), "Not enough memconfs");
+    _Static_assert((ARRAY_SIZE(f_slots) + 1U) <= ARRAY_SIZE(memConfs), "Not enough memconfs");
+
+    REQUIRE_V(CA_InitStruct(&f_ca, &memConfs[3], &InlineCrc32));
 
     for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
     {
-        REQUIRE(FA_ERR_OK == FA_InitStruct(&f_slots[i].fa, &memConfs[i], ValidateFragment, ValidateMetadata));
+        REQUIRE_V(FA_ERR_OK == FA_InitStruct(&f_slots[i].fa, &memConfs[i], ValidateFragment, ValidateMetadata));
         if (VerifySlotContent(&f_slots[i]))
         {
             printf("Fragment area at %lX contains a valid firmware\r\n", memConfs[i].baseAddress);
@@ -607,10 +772,30 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t* keys)
 
 bool INSTALLER_CheckInstallRequest(void)
 {
-    if (f_slots[0].valid)
+    Metadata_t metaArg;
+    CommandType_t cmd;
+
+    if (CA_ReadInstallCommand(&f_ca, &cmd, &metaArg))
     {
-        printf("Installing firmware from slot %i\r\n", 0);
-        return InstallFrom(&f_slots[0]);
+        if (cmd == COMMAND_TYPE_INSTALL_FIRMWARE)
+        {
+            printf("Install command read!\r\n");
+            return ExecuteInstallCommand(&metaArg);
+        }
+        else if (cmd == COMMAND_TYPE_ROLLBACK)
+        {
+            printf("Rollback command read!\r\n");
+            return ExecuteRollbackCommand(&metaArg);
+        }
+        else
+        {
+            printf("Unknown command read: %i!\r\n", (int)cmd);
+            return false;
+        }
+    }
+    else
+    {
+        printf("No install command set!\r\n");
     }
 
     return false;
