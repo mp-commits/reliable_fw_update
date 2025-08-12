@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * installer.h
+ * app_status.h
  *
  * @brief {Short description of the source file}
 */
 
-#ifndef INSTALLER_H_
-#define INSTALLER_H_
+#ifndef APP_STATUS_H_
+#define APP_STATUS_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,10 +38,8 @@ extern "C" {
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "driver_w25qxx.h"
 #include "keys.h"
-#include <stdbool.h>
-#include <stdint.h>
+#include "fragmentstore/fragmentstore.h"
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC TYPE DEFINITIONS                                                    */
@@ -51,6 +49,10 @@ extern "C" {
 /* PUBLIC MACRO DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
 
+#define APP_METADATA_ADDRESS  0x08010000U
+#define FIRST_FLASH_ADDRESS   (APP_METADATA_ADDRESS + sizeof(Metadata_t))
+#define LAST_FLASH_ADDRESS    (0x82000000U)
+
 /*----------------------------------------------------------------------------*/
 /* PUBLIC VARIABLE DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
@@ -59,16 +61,18 @@ extern "C" {
 /* PUBLIC FUNCTION DECLARATIONS                                               */
 /*----------------------------------------------------------------------------*/
 
-extern void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys);
+extern bool APP_STATUS_Verify(const KeyContainer_t* keys);
 
-extern bool INSTALLER_CheckInstallRequest(void);
+extern const Metadata_t* APP_STATUS_GetMetadata(void);
 
-extern bool INSTALLER_TryRepair(void);
+extern bool APP_STATUS_LastVerifyResult(void);
+
+extern void APP_STATUS_PrintMetadata(const Metadata_t* metadata);
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF installer.h */
+/* EoF app_status.h */
 
-#endif /* INSTALLER_H_ */
+#endif /* APP_STATUS_H_ */

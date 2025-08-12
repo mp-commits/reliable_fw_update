@@ -46,9 +46,7 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define APP_METADATA_ADDRESS  0x08010000U
-#define FIRST_FLASH_ADDRESS   (APP_METADATA_ADDRESS + sizeof(Metadata_t))
-#define LAST_FLASH_ADDRESS    (0x82000000U)
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

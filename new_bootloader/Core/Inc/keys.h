@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * installer.h
+ * keys.h
  *
- * @brief {Short description of the source file}
+ * @brief Types for key management
 */
 
-#ifndef INSTALLER_H_
-#define INSTALLER_H_
+#ifndef KEYS_H_
+#define KEYS_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,37 +38,23 @@ extern "C" {
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "driver_w25qxx.h"
-#include "keys.h"
-#include <stdbool.h>
 #include <stdint.h>
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC TYPE DEFINITIONS                                                    */
 /*----------------------------------------------------------------------------*/
 
-/*----------------------------------------------------------------------------*/
-/* PUBLIC MACRO DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC VARIABLE DEFINITIONS                                                */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC FUNCTION DECLARATIONS                                               */
-/*----------------------------------------------------------------------------*/
-
-extern void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys);
-
-extern bool INSTALLER_CheckInstallRequest(void);
-
-extern bool INSTALLER_TryRepair(void);
+typedef struct
+{
+    const uint8_t* metadataPubKey;
+    const uint8_t* firmwarePubKey;
+    const uint8_t* fragmentPubKey;
+} KeyContainer_t;
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF installer.h */
+/* EoF keys.h */
 
-#endif /* INSTALLER_H_ */
+#endif /* KEYS_H_ */

@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app_status.h"
 #include "stdio.h"
 #include "stdbool.h"
 #include "string.h"
@@ -89,100 +90,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   (void)GPIO_Pin;
   printf("Bootloader button interrupt\r\n");
-}
-
-static uint32_t Crc32(const uint8_t* data, size_t size)
-{
-  uint32_t r = ~0; const uint8_t *end = data + size;
- 
-  while(data < end)
-  {
-    r ^= *data++;
- 
-    for(int i = 0; i < 8; i++)
-    {
-      uint32_t t = ~((r&1) - 1); r = (r>>1) ^ (0xEDB88320 & t);
-    }
-  }
- 
-  return ~r;
-}
-
-static bool InRange(uint32_t val, uint32_t low, uint32_t high)
-{
-  return (val >= low) && (val <= high);
-}
-
-static bool IsMetadataValid(const Metadata_t* metadata)
-{
-  const uint8_t* sign = metadata->metadataSignature;
-  const uint8_t*  msg = (const uint8_t*)metadata;
-  size_t          len = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
-  
-  if (1 != ed25519_verify(sign, msg, len, PUBLIC_KEY))
-  {
-    return false;
-  }
-
-  const uint32_t fwSignCrc = Crc32(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
-  const uint32_t metaSignCrc = Crc32(metadata->metadataSignature, sizeof(metadata->metadataSignature));
-
-  /* Add \0 terminator to metadata magic string */
-  char metaStr[sizeof(metadata->magic) + 1U];
-  memcpy(metaStr, metadata->magic, sizeof(metadata->magic));
-  metaStr[sizeof(metadata->magic)] = '\0';
-
-  printf("Metadata magic:           %s\r\n", metaStr);
-  printf("Firmware type:            %lu\r\n", metadata->type);
-  printf("Firmware version:         0x%lX\r\n", metadata->version);
-  printf("Firmware rollback number: %lu\r\n", metadata->rollbackNumber);
-  printf("Firmware ID:              0x%lX\r\n", metadata->firmwareId);
-  printf("Firmware start address:   0x%lX\r\n", metadata->startAddress);
-  printf("Firmware size:            0x%lX\r\n", metadata->firmwareSize);
-  printf("Firmware name:            %s\r\n", metadata->name);
-  printf("Firmware signature CRC32: 0x%lX\r\n", fwSignCrc);
-  printf("Metadata signature CRC32: 0x%lX\r\n", metaSignCrc);
-
-  if (0 != strcmp(metaStr, "_M_E_T_A_D_A_T_A"))
-  {
-    return false;
-  }
-
-  const uint32_t start = metadata->startAddress;
-  const uint32_t end = metadata->startAddress + metadata->firmwareSize;
-
-  if (!InRange(start, FIRST_FLASH_ADDRESS, LAST_FLASH_ADDRESS))
-  {
-    return false;
-  }
-
-  if (!InRange(end, FIRST_FLASH_ADDRESS, LAST_FLASH_ADDRESS))
-  {
-    return false;
-  }
-
-  return true;
-}
-
-static bool IsApplicationValid(const Metadata_t* metadata)
-{
-    const uint8_t* sig = metadata->firmwareSignature;
-    const uint8_t* msg = (const uint8_t*)(metadata->startAddress);
-    const size_t   len = metadata->firmwareSize;
-
-    if (ed25519_verify(sig, msg, len, PUBLIC_KEY))
-    {
-      uint32_t sp = *(__IO uint32_t*)metadata->startAddress;
-      uint32_t pc = *(__IO uint32_t*)(metadata->startAddress + 4);
-    
-      const bool stackPointerValid = sp == 0x20030000U;
-      const bool programCounterValid = InRange(pc, FIRST_FLASH_ADDRESS, LAST_FLASH_ADDRESS);
-    
-      return stackPointerValid && programCounterValid;
-    }
-
-    printf("Firmware signature verification failed!\r\n");
-    return false;
 }
 
 static void JumpTo(uint32_t address)
@@ -259,35 +166,34 @@ int main(void)
     printf("W25Q128_Init OK!\r\n");
   }
 
-  InstallerKeys_t keys = {
+  KeyContainer_t keys = {
     .metadataPubKey = PUBLIC_KEY,
     .firmwarePubKey = PUBLIC_KEY,
     .fragmentPubKey = NULL,
   };
 
+  bool appValid = APP_STATUS_Verify(&keys);
+
   INSTALLER_InitAreas(hnd, &keys);
 
-  if (!INSTALLER_CheckInstallRequest())
+  if (INSTALLER_CheckInstallRequest())
+  {
+    appValid = APP_STATUS_Verify(&keys);
+  }
+  else
   {
     printf("No install requirements\r\n");
   }
 
-  const Metadata_t* metadata = (const Metadata_t*)(APP_METADATA_ADDRESS);
-
-  if (IsMetadataValid(metadata))
+  if (appValid)
   {
-    if (IsApplicationValid(metadata))
-    {
-      JumpTo(metadata->startAddress);
-    }
-    else
-    {
-      printf("No valid application\r\n");
-    }
+    const Metadata_t* metadata = APP_STATUS_GetMetadata();
+    APP_STATUS_PrintMetadata(metadata);
+    JumpTo(metadata->startAddress);
   }
   else
   {
-    printf("No valid metadata\r\n");
+    printf("Cannot jump to invalid app!\r\n");
   }
 
   if (INSTALLER_TryRepair())

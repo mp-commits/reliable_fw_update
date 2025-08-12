@@ -31,7 +31,7 @@
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "main.h"
+#include "app_status.h"
 #include "crc32.h"
 #include "installer.h"
 #include "fragmentstore/command.h"
@@ -103,9 +103,9 @@ return false; \
 /*----------------------------------------------------------------------------*/
 
 static CommandArea_t f_ca;
-static InstallSlot_t f_slots[1];
+static InstallSlot_t f_slots[3];
 static w25qxx_handle_t* f_w25q128;
-static InstallerKeys_t f_keys;
+static KeyContainer_t f_keys;
 
 static const Stm32FlashSector_t f_FLASH_SECTORS[FLASH_SECTOR_TOTAL] = {
     {0x08000000,  16U*KB, FLASH_SECTOR_0 },
@@ -596,7 +596,11 @@ static bool ExecuteInstallCommand(const Metadata_t* metaArg)
     
     if (status == COMMAND_STATE_NONE)
     {
-        REQUIRE_B(CA_WriteHistory(&f_ca, (const Metadata_t*)APP_METADATA_ADDRESS));
+        // Skip history write if the app was not valid!
+        if (APP_STATUS_LastVerifyResult())
+        {
+            REQUIRE_B(CA_WriteHistory(&f_ca, (const Metadata_t*)APP_METADATA_ADDRESS));
+        }
         REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_HISTORY_WRITTEN));
         status = COMMAND_STATE_HISTORY_WRITTEN;
         printf("History written\r\n");
@@ -700,7 +704,7 @@ static bool ExecuteRollbackCommand(Metadata_t* metaArg)
 /* PUBLIC FUNCTION DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
 
-void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const InstallerKeys_t* keys)
+void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
 {
     REQUIRE_V(w25q128 != NULL);
     REQUIRE_V(keys != NULL);
