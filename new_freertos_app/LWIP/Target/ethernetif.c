@@ -907,6 +907,27 @@ void HAL_ETH_TxFreeCallback(uint32_t * buff)
 }
 
 /* USER CODE BEGIN 8 */
+void ethernetif_deinit(struct netif *netif)
+{
+  /* Stop Ethernet DMA transmission and reception */
+  HAL_ETH_Stop(&heth);
 
+  /* Disable interrupts if any were enabled */
+  HAL_NVIC_DisableIRQ(ETH_IRQn);
+  HAL_NVIC_DisableIRQ(ETH_WKUP_IRQn);
+
+  /* Power down the PHY if applicable */
+  // Example for LAN8742 on Nucleo-F439ZI:
+  // uint32_t regvalue = 0;
+  // HAL_ETH_ReadPHYRegister(&heth, PHY_BCR, &regvalue);
+  // regvalue |= PHY_BCR_POWERDOWN;
+  // HAL_ETH_WritePHYRegister(&heth, PHY_BCR, regvalue);
+
+  /* Deinit the HAL Ethernet peripheral */
+  HAL_ETH_DeInit(&heth);
+
+  /* Optionally disable MAC clock to save power */
+  __HAL_RCC_ETH_CLK_DISABLE();
+}
 /* USER CODE END 8 */
 

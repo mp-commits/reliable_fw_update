@@ -35,6 +35,7 @@
 #include <stdio.h>
 
 #include "cmsis_os.h"
+#include "stm32f4xx_it.h"
 
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
@@ -46,6 +47,7 @@
 #include "crc32.h"
 #include "metadata.h"
 #include "server.h"
+#include "system_reset.h"
 
 #include "fragmentstore/fragmentstore.h"
 #include "fragmentstore/command.h"
@@ -94,6 +96,7 @@ server_addr.sin_addr.s_addr = address;
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
+static bool f_resetRequest;
 static UpdateServer_t f_us;
 static TransferBuffer_t f_tb;
 static FragmentArea_t f_fa;
@@ -212,7 +215,7 @@ bool ValidateMetadata(const Metadata_t* metadata)
     return true;
 }
 
-static uint8_t TEST_ReadDataById(
+static uint8_t ReadDataById(
     uint8_t id, 
     uint8_t* out, 
     size_t maxSize, 
@@ -239,7 +242,7 @@ static uint8_t TEST_ReadDataById(
     }
 }
 
-static uint8_t TEST_WriteDataById(
+static uint8_t WriteDataById(
     uint8_t id, 
     const uint8_t* in, 
     size_t size)
@@ -294,12 +297,17 @@ static uint8_t TEST_WriteDataById(
 
         return PROTOCOL_ACK_OK;
 
+    case PROTOCOL_DATA_ID_RESET:
+        printf("Received reset request!\r\n");
+        f_resetRequest = true;
+        return PROTOCOL_ACK_OK;
+
     default:
         return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
     }
 }
 
-static uint8_t TEST_PutMetadata(
+static uint8_t PutMetadata(
     const uint8_t* data, 
     size_t size)
 {
@@ -329,7 +337,7 @@ static uint8_t TEST_PutMetadata(
     }
 }
 
-static uint8_t TEST_PutFragment(
+static uint8_t PutFragment(
     const uint8_t* data, 
     size_t size)
 {
@@ -367,6 +375,7 @@ static uint8_t TEST_PutFragment(
 
 void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
 {
+    f_resetRequest = false;
     f_w25q128 = arg;
     REQUIRE(f_w25q128 != NULL);
 
@@ -419,7 +428,7 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
 
     REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa, &memConf[0], ValidateFragment, ValidateMetadata));
     REQUIRE(CA_InitStruct(&f_ca, &memConf[3], &InlineCrc32));
-    REQUIRE(US_InitServer(&f_us, TEST_ReadDataById, TEST_WriteDataById, TEST_PutMetadata, TEST_PutFragment));
+    REQUIRE(US_InitServer(&f_us, ReadDataById, WriteDataById, PutMetadata, PutFragment));
     REQUIRE(TRANSFER_Init(&f_tb, &f_us, f_memBlock, sizeof(f_memBlock)));
 
     int sock;
@@ -464,9 +473,21 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
             (struct sockaddr *)&client_addr, 
             client_addr_len
         );
+
+        if (f_resetRequest)
+        {
+            break;
+        }
     }
 
     close(sock);
+
+    if (f_resetRequest)
+    {
+        printf("Executing reset request\r\n");
+        TIM6_Delay_us(1000);
+        system_reset_graceful();
+    }
 }
 
 /* EoF udpserver.c */
