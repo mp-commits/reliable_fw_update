@@ -53,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app_status.c
     Core/Src/driver_w25qxx.c
     Core/Src/installer.c
+    Core/Src/no_init_ram.c
     Core/Src/w25qxx_init.c
 )
 

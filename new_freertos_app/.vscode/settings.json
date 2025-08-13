@@ -54,6 +54,10 @@
         "thread": "c",
         "cinttypes": "c",
         "fragmentstore.h": "c",
-        "err.h": "c"
+        "err.h": "c",
+        "netdb.h": "c",
+        "api.h": "c",
+        "netif.h": "c",
+        "ethernetif.h": "c"
     }
 }

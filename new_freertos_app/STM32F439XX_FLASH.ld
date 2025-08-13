@@ -61,7 +61,8 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 192K
+NVRAM (xrw)    : ORIGIN = 0x20000000, LENGTH = 0x40
+RAM (xrw)      : ORIGIN = 0x20000040, LENGTH = 192K - 0x40
 CCMRAM (xrw)      : ORIGIN = 0x10000000, LENGTH = 64K
 METADATA(r)     : ORIGIN = 0x8010000, LENGTH = 0x200
 FLASH (rx)      : ORIGIN = 0x8010200, LENGTH = 2048K - 64K - 0x200
@@ -220,7 +221,11 @@ SECTIONS
     . = ALIGN(8);
   } >RAM
 
-
+  .no_init_ram (NOLOAD):
+  {
+    *(.no_init_ram)
+    *(.no_init_ram*)
+  } >NVRAM
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

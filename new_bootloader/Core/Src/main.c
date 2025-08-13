@@ -30,6 +30,7 @@
 #include "installer.h"
 #include "w25qxx_init.h"
 #include "delay.h"
+#include "no_init_ram.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -129,7 +130,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  NO_INIT_RAM_Init();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -155,6 +156,10 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   printf("Bootloader initialized\r\n");
+
+  NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetCount, NO_INIT_RAM_content.resetCount + 1U);
+
+  printf("No init memory reset count: %lu\r\n", NO_INIT_RAM_content.resetCount);
 
   w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
   if (hnd == NULL)

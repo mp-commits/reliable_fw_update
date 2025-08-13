@@ -7,6 +7,8 @@ extern "C" {
 
 void system_reset_graceful(void);
 
+void system_reset_hard(void);
+
 #ifdef __cplusplus
 }
 #endif

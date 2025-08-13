@@ -14,6 +14,12 @@ extern SPI_HandleTypeDef hspi3;
 extern UART_HandleTypeDef huart3;
 extern struct netif gnetif;
 
+void system_reset_hard(void)
+{
+    NVIC_SystemReset();
+    while (1) { } // Should never be reached
+}
+
 /* Main graceful reset function */
 void system_reset_graceful(void)
 {

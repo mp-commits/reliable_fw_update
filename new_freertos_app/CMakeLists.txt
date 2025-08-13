@@ -53,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/bigendian.c
     Core/Src/driver_w25qxx.c
     Core/Src/metadata.c
+    Core/Src/no_init_ram.c
     Core/Src/tcpserver.c
     Core/Src/udpserver.c
     Core/Src/system_reset.c
@@ -105,4 +106,10 @@ add_custom_command(
 add_custom_target(
     signed_hex_file ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
+)
+
+add_custom_target(Flash_to_STM32
+  COMMAND ${CMAKE_COMMAND} -E echo "Flashing board..."
+  COMMAND updateclient.exe -a 192.168.1.50 -p 7 -i ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
+  DEPENDS signed_hex_file
 )

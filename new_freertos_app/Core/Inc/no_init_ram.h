@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * crc32.h
+ * no_init_ram.h
  *
- * @brief Simple and slow CRC32 function
+ * @brief {Short description of the source file}
 */
 
-#ifndef CRC32_H_
-#define CRC32_H_
+#ifndef NO_INIT_RAM_H_
+#define NO_INIT_RAM_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,33 +39,47 @@ extern "C" {
 /*----------------------------------------------------------------------------*/
 
 #include <stdint.h>
-#include <stddef.h>
+
+/*----------------------------------------------------------------------------*/
+/* PUBLIC TYPE DEFINITIONS                                                    */
+/*----------------------------------------------------------------------------*/
+
+typedef struct
+{
+    uint32_t resetCount;
+    uint32_t appTag;
+
+    uint32_t reserved[13];
+
+    uint32_t crc;
+} NoInitRamContent_t;
+
+/*----------------------------------------------------------------------------*/
+/* PUBLIC MACRO DEFINITIONS                                                   */
+/*----------------------------------------------------------------------------*/
+
+#define APP_TAG_INVALID (0xDEADBEEFU)
+#define APP_TAG_GOOD    (0x600DF00DU)
+
+/*----------------------------------------------------------------------------*/
+/* PUBLIC VARIABLE DEFINITIONS                                                */
+/*----------------------------------------------------------------------------*/
+
+extern NoInitRamContent_t NO_INIT_RAM_content;
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC FUNCTION DECLARATIONS                                               */
 /*----------------------------------------------------------------------------*/
 
-static inline uint32_t InlineCrc32(const uint8_t* data, size_t size)
-{
-  uint32_t r = ~0; const uint8_t *end = data + size;
- 
-  while(data < end)
-  {
-    r ^= *data++;
- 
-    for(int i = 0; i < 8; i++)
-    {
-      uint32_t t = ~((r&1) - 1); r = (r>>1) ^ (0xEDB88320 & t);
-    }
-  }
- 
-  return ~r;
-}
+
+extern void NO_INIT_RAM_Init(void);
+
+extern void NO_INIT_RAM_SetMember(uint32_t* member, uint32_t value);
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF crc32.h */
+/* EoF no_init_ram.h */
 
-#endif /* CRC32_H_ */
+#endif /* NO_INIT_RAM_H_ */
