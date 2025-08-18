@@ -340,7 +340,7 @@ static uint8_t PutMetadata(
     if (code == FA_ERR_OK)
     {
         (void)memcpy(&f_metadata[slot], (const Metadata_t*)data, sizeof(Metadata_t));
-        printf("Wrote metadata\r\n");
+        printf("Wrote metadata to slot %u\r\n", slot);
         return PROTOCOL_ACK_OK;
     }
     else if (code == FA_ERR_BUSY)
@@ -388,7 +388,7 @@ static uint8_t PutFragment(
 
     if (code == FA_ERR_OK)
     {
-        printf("Wrote fragment to slot %lu\r\n", frag->number);
+        printf("Wrote fragment to slot %u.%lu\r\n", slot, frag->number);
         return PROTOCOL_ACK_OK;
     }
     else if (code == FA_ERR_BUSY)
