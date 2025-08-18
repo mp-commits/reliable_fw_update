@@ -179,6 +179,12 @@ int main(void)
 
   bool appValid = APP_STATUS_Verify(&keys);
 
+  if (appValid && (NO_INIT_RAM_content.resetCount > 10U))
+  {
+    printf("Reset loop stopped by anti boot loop detection\r\n");
+    appValid = false;
+  }
+
   INSTALLER_InitAreas(hnd, &keys);
 
   if (INSTALLER_CheckInstallRequest())

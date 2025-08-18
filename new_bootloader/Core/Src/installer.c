@@ -38,6 +38,7 @@
 #include "fragmentstore/fragmentstore.h"
 #include "ed25519.h"
 #include "ed25519_extra.h"
+#include "no_init_ram.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -794,12 +795,32 @@ bool INSTALLER_CheckInstallRequest(void)
         else
         {
             printf("Unknown command read: %i!\r\n", (int)cmd);
-            return false;
         }
     }
-    else
+
+    printf("No install command set!\r\n");
+
+    if (NO_INIT_RAM_content.appTag == APP_TAG_INVALID)
     {
-        printf("No install command set!\r\n");
+        printf("Application invalid flag set!\r\n");
+
+        if (CA_ReadHistory(&f_ca, &metaArg))
+        {
+            CommandStatus_t status = CA_GetStatus(&f_ca);
+            if (status != COMMAND_STATE_FAILED)
+            {
+                /* Erase all other progress except previously failed operation */
+                (void)CA_EraseInstallCommand(&f_ca);
+            }
+            (void)ExecuteRollbackCommand(&metaArg);
+            return false;
+        }
+        else
+        {
+            printf("Cannot find history for automatic rollback!\r\n");
+            // TODO: Check if rescue firmware exists
+            return false;
+        }
     }
 
     return false;

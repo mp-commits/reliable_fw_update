@@ -75,3 +75,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     libs::fragmentstore
     libs::ed25519
 )
+
+add_custom_target(Flash_to_STM32
+  COMMAND ${CMAKE_COMMAND} -E echo "Flashing board..."
+  COMMAND STM32_Programmer_CLI -c port=SWD -d $<TARGET_FILE:${CMAKE_PROJECT_NAME}> -v -rst
+  DEPENDS $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+)
