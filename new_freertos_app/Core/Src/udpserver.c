@@ -328,7 +328,7 @@ static uint8_t PutMetadata(
     size_t slot = 0;
     for (size_t i = 0; i < 3; i++)
     {
-        if (!MetadataEqual(&f_metadata[0], &FIRMWARE_METADATA))
+        if (!MetadataEqual(&f_metadata[i], &FIRMWARE_METADATA))
         {
             slot = i;
             break;
