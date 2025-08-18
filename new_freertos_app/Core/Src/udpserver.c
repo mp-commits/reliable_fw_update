@@ -99,7 +99,8 @@ server_addr.sin_addr.s_addr = address;
 static bool f_resetRequest;
 static UpdateServer_t f_us;
 static TransferBuffer_t f_tb;
-static FragmentArea_t f_fa;
+static FragmentArea_t f_fa[3];
+static Metadata_t f_metadata[3];
 static CommandArea_t f_ca;
 static uint8_t f_memBlock[5 * 1024];
 static w25qxx_handle_t* f_w25q128 = NULL;
@@ -107,6 +108,11 @@ static w25qxx_handle_t* f_w25q128 = NULL;
 /*----------------------------------------------------------------------------*/
 /* PRIVATE FUNCTION DEFINITIONS                                               */
 /*----------------------------------------------------------------------------*/
+
+static bool MetadataEqual(const Metadata_t* a, const Metadata_t* b)
+{
+    return 0 == memcmp(a, b, sizeof(Metadata_t));
+}
 
 static bool VerifyMemory(Address_t address, size_t size, const uint8_t* cmp)
 {
@@ -318,10 +324,22 @@ static uint8_t PutMetadata(
         return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
     }
 
-    FA_ReturnCode_t code =  FA_WriteMetadata(&f_fa, (const Metadata_t*)data);
+    // Find usable slot for the incoming metadata
+    size_t slot = 0;
+    for (size_t i = 0; i < 3; i++)
+    {
+        if (!MetadataEqual(&f_metadata[0], &FIRMWARE_METADATA))
+        {
+            slot = i;
+            break;
+        }
+    }
+
+    FA_ReturnCode_t code =  FA_WriteMetadata(&f_fa[slot], (const Metadata_t*)data);
 
     if (code == FA_ERR_OK)
     {
+        (void)memcpy(&f_metadata[slot], (const Metadata_t*)data, sizeof(Metadata_t));
         printf("Wrote metadata\r\n");
         return PROTOCOL_ACK_OK;
     }
@@ -350,7 +368,23 @@ static uint8_t PutFragment(
 
     const Fragment_t* frag = (const Fragment_t*)data;
 
-    FA_ReturnCode_t code =  FA_WriteFragment(&f_fa, frag->number, frag);
+    int slot = -1;
+    for (int i = 0; i < 3; i++)
+    {
+        if (frag->firmwareId == f_metadata[i].firmwareId)
+        {
+            slot = i;
+            break;
+        }
+    }
+
+    if (slot < 0)
+    {
+        printf("No suitable slot to write fragment into!\r\n");
+        return PROTOCOL_NACK_REQUEST_FAILED;
+    }
+
+    FA_ReturnCode_t code =  FA_WriteFragment(&f_fa[slot], frag->number, frag);
 
     if (code == FA_ERR_OK)
     {
@@ -426,7 +460,11 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
         },
     };
 
-    REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa, &memConf[0], ValidateFragment, ValidateMetadata));
+    for (size_t i = 0; i < 3; i++)
+    {
+        REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa[i], &memConf[i], ValidateFragment, ValidateMetadata));
+        (void)FA_ReadMetadata(&f_fa[i], &f_metadata[i]);
+    }
     REQUIRE(CA_InitStruct(&f_ca, &memConf[3], &InlineCrc32));
     REQUIRE(US_InitServer(&f_us, ReadDataById, WriteDataById, PutMetadata, PutFragment));
     REQUIRE(TRANSFER_Init(&f_tb, &f_us, f_memBlock, sizeof(f_memBlock)));

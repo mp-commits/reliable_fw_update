@@ -108,8 +108,14 @@ add_custom_target(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
 )
 
-add_custom_target(Flash_to_STM32
+add_custom_target(UDP_Flash_to_STM32
   COMMAND ${CMAKE_COMMAND} -E echo "Flashing board..."
   COMMAND updateclient.exe -a 192.168.1.50 -p 7 -i ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
+  DEPENDS signed_hex_file
+)
+
+add_custom_target(CubeCLI_FLash_to_STM32
+  COMMAND ${CMAKE_COMMAND} -E echo "Flashing board..."
+  COMMAND STM32_Programmer_CLI -c port=SWD -d ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex -v -rst
   DEPENDS signed_hex_file
 )

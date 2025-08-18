@@ -390,6 +390,12 @@ void startCommTask(void *argument)
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
 
+  //Code to cause a fault interrupt!
+  //printf("CommTask created\r\n");
+  //osDelay(10);
+  //int* argInt = (int*)0x12345678U;
+  //printf("My arg is %08x\r\n", *argInt);
+
   (void)argument;
   w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
   
