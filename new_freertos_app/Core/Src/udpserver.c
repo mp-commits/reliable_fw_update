@@ -308,6 +308,27 @@ static uint8_t WriteDataById(
         f_resetRequest = true;
         return PROTOCOL_ACK_OK;
 
+    case PROTOCOL_DATA_ID_ERASE_SLOT:
+        if ((size == 1U) && (*in < 3U))
+        {
+            const uint8_t slot = *in;
+            printf("Erasing slot %i...\r\n", (int)slot);
+            const FA_ReturnCode_t res = FA_EraseArea(&f_fa[slot]);
+            if (res == FA_ERR_OK)
+            {
+                printf("OK\r\n");
+                memset(&f_metadata[slot], 0, sizeof(Metadata_t));
+                return PROTOCOL_ACK_OK;
+            }
+            
+            printf("FAILED\r\n");
+            return PROTOCOL_NACK_BUSY_REPEAT_REQUEST;
+        }
+        else
+        {
+            return PROTOCOL_NACK_INVALID_REQUEST;
+        }
+
     default:
         return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
     }

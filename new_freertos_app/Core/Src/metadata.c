@@ -58,9 +58,9 @@ const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) =
 {
     .magic = "_M_E_T_A_D_A_T_A",
     .type = 0xA5A5A5A5U,
-    .version = 3U,
+    .version = 4U,
     .rollbackNumber = 2U,
-    .firmwareId = 0xFAD02A3BU,
+    .firmwareId = 0xFAE02A3BU,
     .startAddress = (uint32_t)ISR_VECTOR_START,
     .firmwareSize = 0x00000000U,
     .name = "test_firmware_ver1\0\0\0\0\0\0\0\0\0\0\0\0\0",
