@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "server.h"
+#include "no_init_ram.h"
 #include "driver_w25qxx.h"
 #include "w25qxx_init.h"
 /* USER CODE END Includes */
@@ -57,7 +58,7 @@ UART_HandleTypeDef huart3;
 osThreadId_t commTaskHandle;
 const osThreadAttr_t commTask_attributes = {
   .name = "commTask",
-  .stack_size = 1024 * 4,
+  .stack_size = 1024 * 8,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for blueLedTask */
@@ -425,12 +426,22 @@ void startBlueLedTask(void *argument)
   /* USER CODE BEGIN startBlueLedTask */
   (void)argument;
   
+  uint32_t counter = 0;
 
   /* Infinite loop */
   for(;;)
   {
     HAL_GPIO_TogglePin(LED_PORT_BLUE, LED_PIN_BLUE);
     osDelay(1000);
+    
+    if (counter == 3)
+    {
+      NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetCount, 0U);
+    }
+    else
+    {
+      counter++;
+    }
   }
   /* USER CODE END startBlueLedTask */
 }

@@ -22,53 +22,52 @@
  *
  * -----------------------------------------------------------------------------
  *
- * metadata.c
+ * keystore.c
  *
- * @brief Metadata of this firmware version. Signatures are generated after build
+ * @brief {Short description of the source file}
 */
 
 /*----------------------------------------------------------------------------*/
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "metadata.h"
-#include "git_hash.h"
-#include <assert.h>
+#include "keystore.h"
+
+/*----------------------------------------------------------------------------*/
+/* PRIVATE TYPE DEFINITIONS                                                   */
+/*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 /* MACRO DEFINITIONS                                                          */
 /*----------------------------------------------------------------------------*/
 
-#define REPEAT8(x) (x),(x),(x),(x),(x),(x),(x),(x)
-#define REPEAT64(x) REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x)
-
 /*----------------------------------------------------------------------------*/
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
-extern const uint32_t ISR_VECTOR_START[];
-
-const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
-{
-    .magic = "_M_E_T_A_D_A_T_A",
-    .type = 0xA5A5A5A5U,
-    .version = 1U,
-    .rollbackNumber = 0U,
-    .firmwareId = GIT_HASH,
-    .startAddress = (uint32_t)ISR_VECTOR_START,
-    .firmwareSize = 0x00000000U,
-    .name = "test_firmware_ver1\0\0\0\0\0\0\0\0\0\0\0\0\0",
-    .firmwareSignature = {REPEAT64(0xA5)},
-    .metadataSignature = {REPEAT64(0xDA)}
+static const uint8_t PUBLIC_KEY[32] = {
+    0x8f, 0x0d, 0xeb, 0x67, 0xb9, 0xfa, 0x75, 0xc5,
+    0x68, 0x25, 0x00, 0x19, 0x86, 0x16, 0x91, 0xaf,
+    0x6e, 0x00, 0x0b, 0x74, 0x64, 0x9f, 0xb3, 0xc0,
+    0x5d, 0x8f, 0x65, 0x13, 0x9f, 0x0d, 0x65, 0x67
 };
 
-_Static_assert(sizeof(FIRMWARE_METADATA) <= 0x200U, "Metadata too large");
+/*----------------------------------------------------------------------------*/
+/* PRIVATE FUNCTION DEFINITIONS                                               */
+/*----------------------------------------------------------------------------*/
 
-/* EoF metadata.c */
+/*----------------------------------------------------------------------------*/
+/* PUBLIC FUNCTION DEFINITIONS                                                */
+/*----------------------------------------------------------------------------*/
+
+extern const uint8_t* KEYSTORE_GetMetadataPublicKey(void)
+{
+    return PUBLIC_KEY;
+}
+
+extern const uint8_t* KEYSTORE_GetFragmentPublicKey(void)
+{
+    return PUBLIC_KEY;
+}
+
+/* EoF keystore.c */

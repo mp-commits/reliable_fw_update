@@ -51,6 +51,7 @@
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
+static bool f_metadataOk = false;
 static bool f_valid = false;
 
 /*----------------------------------------------------------------------------*/
@@ -126,11 +127,14 @@ static bool IsApplicationValid(const Metadata_t* metadata, const uint8_t* public
 
 bool APP_STATUS_Verify(const KeyContainer_t* keys)
 {
+    f_metadataOk = false;
     f_valid = false;
     const Metadata_t* metadata = (const Metadata_t*)(APP_METADATA_ADDRESS);
 
     if (IsMetadataValid(metadata, keys->metadataPubKey))
     {
+        f_metadataOk = true;
+
         if (IsApplicationValid(metadata, keys->firmwarePubKey))
         {
             f_valid = true;
@@ -157,6 +161,11 @@ const Metadata_t* APP_STATUS_GetMetadata(void)
 bool APP_STATUS_LastVerifyResult(void)
 {
     return f_valid;
+}
+
+bool APP_STATUS_LastMetadataVerifyResult(void)
+{
+    return f_metadataOk;
 }
 
 void APP_STATUS_PrintMetadata(const Metadata_t* metadata)

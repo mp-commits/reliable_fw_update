@@ -89,6 +89,7 @@ void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
   NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_INVALID);
+  NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetArg, 20U);
   system_reset_hard();
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
@@ -105,6 +106,7 @@ void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
   NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_INVALID);
+  NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetArg, 21U);
   system_reset_hard();
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
@@ -121,6 +123,7 @@ void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
   NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_INVALID);
+  NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetArg, 22U);
   system_reset_hard();
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
@@ -137,6 +140,7 @@ void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
   NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_INVALID);
+  NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetArg, 23U);
   system_reset_hard();
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)

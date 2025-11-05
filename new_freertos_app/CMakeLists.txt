@@ -23,6 +23,7 @@ set(CMAKE_PROJECT_NAME new_freertos_app)
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
+include("cmake/git_hash.cmake")
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -52,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/bigendian.c
     Core/Src/driver_w25qxx.c
+    Core/Src/keystore.c
     Core/Src/metadata.c
     Core/Src/no_init_ram.c
     Core/Src/tcpserver.c
@@ -77,6 +79,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
     libs::fragmentstore
     libs::updateserver
+    libs::ed25519
 )
 
 add_custom_command(
@@ -110,7 +113,7 @@ add_custom_target(
 
 add_custom_target(UDP_Flash_to_STM32
   COMMAND ${CMAKE_COMMAND} -E echo "Flashing board..."
-  COMMAND updateclient.exe -a 192.168.1.50 -p 7 -i ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
+  COMMAND updateclient.exe -a 192.168.1.50 -p 7 upload ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}_signed.hex
   DEPENDS signed_hex_file
 )
 

@@ -48,8 +48,10 @@ typedef struct
 {
     uint32_t resetCount;
     uint32_t appTag;
+    uint32_t bootloaderTag;
+    uint32_t resetArg;
 
-    uint32_t reserved[13];
+    uint32_t reserved[11];
 
     uint32_t crc;
 } NoInitRamContent_t;
@@ -58,8 +60,10 @@ typedef struct
 /* PUBLIC MACRO DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
 
-#define APP_TAG_INVALID (0xDEADBEEFU)
-#define APP_TAG_GOOD    (0x600DF00DU)
+#define APP_TAG_INVALID     (0xDEADBEEFU)
+#define APP_TAG_GOOD        (0x600DF00DU)
+#define BL_TAG_NEW_INSTALL  (0xFEEDC0DEU)
+#define BL_TAG_TRYOUT       (0x0D15EA5EU)
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC VARIABLE DEFINITIONS                                                */

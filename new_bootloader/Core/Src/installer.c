@@ -51,11 +51,12 @@
 
 typedef struct
 {
-    FragmentArea_t  fa;         /* Fragment area handle */
-    bool            valid;      /* This slot contains a valid firmware */
-    uint32_t        highestAddr;/* Highest address of this firmware */
-    Metadata_t      metadata;   /* Metadata in the area */
-    Fragment_t      fragMem;    /* Memory allocation for reading */
+    FragmentArea_t      fa;             /* Fragment area handle */
+    bool                valid;          /* This slot contains a valid firmware */
+    uint32_t            highestAddr;    /* Highest address of this firmware */
+    size_t              lastFragIdx;    /* Index of the last fragment */
+    Metadata_t          metadata;       /* Metadata in the area */
+    Fragment_t          fragMem;        /* Memory allocation for reading */
 } InstallSlot_t;
 
 typedef struct
@@ -103,10 +104,10 @@ return false; \
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
-static CommandArea_t f_ca;
-static InstallSlot_t f_slots[3];
-static w25qxx_handle_t* f_w25q128;
-static KeyContainer_t f_keys;
+static CommandArea_t        f_ca;
+static InstallSlot_t        f_slots[3];
+static w25qxx_handle_t*     f_w25q128;
+static KeyContainer_t       f_keys;
 
 static const Stm32FlashSector_t f_FLASH_SECTORS[FLASH_SECTOR_TOTAL] = {
     {0x08000000,  16U*KB, FLASH_SECTOR_0 },
@@ -139,6 +140,9 @@ static_assert(ARRAY_SIZE(f_FLASH_SECTORS) == FLASH_SECTOR_TOTAL, "Incomplete sec
 
 static_assert((sizeof(Metadata_t) % sizeof(uint32_t)) == 0U, "Metadata not word aligned");
 static_assert((member_size(Fragment_t, content) % sizeof(uint32_t)) == 0U, "Fragment content not word aligned");
+static_assert(member_size(Metadata_t, metadataSignature) == 64U, "Signature size must be 64 bytes");
+static_assert(member_size(Metadata_t, firmwareSignature) == 64U, "Signature size must be 64 bytes");
+static_assert(member_size(Fragment_t, signature) == 64U, "Signature size must be 64 bytes");
 
 /*----------------------------------------------------------------------------*/
 /* CALLBACKS FOR FRAGMENT AREAS                                               */
@@ -236,8 +240,14 @@ bool EraseSectors(Address_t address, size_t size)
  */
 bool ValidateFragment(const Fragment_t* frag)
 {
-    (void)frag;
-    return true;
+    const uint32_t fsa = frag->startAddress;
+    const uint32_t fea = frag->startAddress + frag->size;
+    
+    const bool sizeOk = frag->size <= sizeof(frag->content);
+    const bool fsaOk = fsa >= FIRST_FLASH_ADDRESS;
+    const bool feaOk = fea <= LAST_FLASH_ADDRESS;
+
+    return sizeOk && fsaOk && feaOk;
 }
 
 /** Validate one fragment
@@ -255,12 +265,14 @@ bool ValidateMetadata(const Metadata_t* metadata)
     const uint8_t* msg = (const uint8_t*)metadata;
     const size_t msgLen = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
 
-    return 1 == ed25519_verify(
+    int valid = ed25519_verify(
         metadata->metadataSignature, 
         msg, 
         msgLen,
         f_keys.metadataPubKey
     );
+
+    return 1 == valid;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -273,7 +285,7 @@ static bool VerifySlotContent(InstallSlot_t* slot)
     Fragment_t* frag = &slot->fragMem;
 
     FA_ReturnCode_t res = FA_ReadMetadata(&slot->fa, meta);
-    
+
     if (res == FA_ERR_OK)
     {
         ed25519_multipart_t ctx;
@@ -297,6 +309,8 @@ static bool VerifySlotContent(InstallSlot_t* slot)
             printf("FA_FindLastFragment failed!\r\n");
             return false;
         }
+
+        slot->lastFragIdx = lastIdx;
 
         uint32_t nextStart = FIRST_FLASH_ADDRESS;
 
@@ -324,7 +338,6 @@ static bool VerifySlotContent(InstallSlot_t* slot)
 
             if (frag->startAddress < meta->startAddress)
             {
-                //printf("Fragment %u is ahead of actual start address\r\n", i);
                 verifyOffset = meta->startAddress - frag->startAddress;
             }
 
@@ -348,8 +361,6 @@ static bool VerifySlotContent(InstallSlot_t* slot)
             {
                 slot->highestAddr = fragEndAddr;
             }
-
-            //printf("Fragment %u is valid\r\n", i);
         }
 
         ed = ed25519_multipart_end(&ctx);
@@ -514,12 +525,9 @@ static bool InstallFrom(InstallSlot_t* slot)
     Metadata_t* meta = &slot->metadata;
     Fragment_t* frag = &slot->fragMem;
 
-    size_t lastIdx = 0U;
-    FA_ReturnCode_t res = FA_FindLastFragment(&slot->fa, frag, &lastIdx);
-
-    if (res != FA_ERR_OK)
+    if (!ValidateMetadata(meta))
     {
-        printf("FA_FindLastFragment failed!\r\n");
+        printf("Install target metadata reverification failed!\r\n");
         return false;
     }
 
@@ -533,7 +541,7 @@ static bool InstallFrom(InstallSlot_t* slot)
         return false;
     }
 
-    for (size_t i = 0; i <= lastIdx; i++)
+    for (size_t i = 0; i <= slot->lastFragIdx; i++)
     {
         FA_ReturnCode_t res = FA_ReadFragment(&slot->fa, i, frag);
 
@@ -563,6 +571,31 @@ static bool EmptyMetadata(const Metadata_t* m)
         }
     }
     return true;
+}
+
+static bool InstallAllowed(const Metadata_t* target, bool automatic)
+{
+    if (!APP_STATUS_LastVerifyResult())
+    {
+        return true;
+    }
+
+    const Metadata_t* app = APP_STATUS_GetMetadata();
+
+    if (automatic && 
+        (target->type == app->type) &&
+        (NO_INIT_RAM_content.bootloaderTag == BL_TAG_TRYOUT))
+    {
+        return true;
+    }
+
+    if ((target->type == app->type) &&
+        (target->rollbackNumber >= app->rollbackNumber))
+    {
+        return true;
+    }
+
+    return false;
 }
 
 static bool ExecuteInstallCommand(const Metadata_t* metaArg)
@@ -595,6 +628,13 @@ static bool ExecuteInstallCommand(const Metadata_t* metaArg)
         return false;
     }
     
+    if (!InstallAllowed(metaArg, false))
+    {
+        printf("Install prevented by anti-rollback logic!\n\r");
+        REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
+        return false;
+    }
+
     if (status == COMMAND_STATE_NONE)
     {
         // Skip history write if the app was not valid!
@@ -627,10 +667,12 @@ static bool ExecuteInstallCommand(const Metadata_t* metaArg)
         return CA_EraseInstallCommand(&f_ca);
     }
 
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.bootloaderTag, BL_TAG_NEW_INSTALL);
+
     return false;
 }
 
-static bool ExecuteRollbackCommand(Metadata_t* metaArg)
+static bool ExecuteRollbackCommand(Metadata_t* metaArg, bool automaticRollback)
 {
     CommandStatus_t status = CA_GetStatus(&f_ca);
 
@@ -658,7 +700,7 @@ static bool ExecuteRollbackCommand(Metadata_t* metaArg)
             (0 == memcmp(metaArg, &f_slots[i].metadata, sizeof(Metadata_t))))
         {
             slot = &f_slots[i];
-            printf("Found rollback firmware from slot %u\r\n", i);
+            printf("Found target rollback firmware from slot %u\r\n", i);
             break;
         }
     }
@@ -668,6 +710,14 @@ static bool ExecuteRollbackCommand(Metadata_t* metaArg)
         printf("Target rollback firmware not found! Install failed!\r\n");
         REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
         return false;
+    }
+
+    if (!InstallAllowed(metaArg, automaticRollback))
+    {
+        printf(
+            "Rollback prevented by anti-rollback logic when rolling back %s\n\r",
+            automaticRollback ? "automatically" : "manually"
+        );
     }
 
     if (status == COMMAND_STATE_NONE)
@@ -790,7 +840,7 @@ bool INSTALLER_CheckInstallRequest(void)
         else if (cmd == COMMAND_TYPE_ROLLBACK)
         {
             printf("Rollback command read!\r\n");
-            return ExecuteRollbackCommand(&metaArg);
+            return ExecuteRollbackCommand(&metaArg, false);
         }
         else
         {
@@ -812,13 +862,11 @@ bool INSTALLER_CheckInstallRequest(void)
                 /* Erase all other progress except previously failed operation */
                 (void)CA_EraseInstallCommand(&f_ca);
             }
-            (void)ExecuteRollbackCommand(&metaArg);
-            return false;
+            return ExecuteRollbackCommand(&metaArg, true);
         }
         else
         {
             printf("Cannot find history for automatic rollback!\r\n");
-            // TODO: Check if rescue firmware exists
             return false;
         }
     }
@@ -828,6 +876,11 @@ bool INSTALLER_CheckInstallRequest(void)
 
 bool INSTALLER_TryRepair(void)
 {
+    if (APP_STATUS_LastMetadataVerifyResult())
+    {
+        return ExecuteInstallCommand(APP_STATUS_GetMetadata());
+    }
+
     return false;
 }
 

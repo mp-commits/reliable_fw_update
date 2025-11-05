@@ -160,6 +160,7 @@ int main(void)
   NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetCount, NO_INIT_RAM_content.resetCount + 1U);
 
   printf("No init memory reset count: %lu\r\n", NO_INIT_RAM_content.resetCount);
+  printf("Last no init memory reset arg = %lu\r\n", NO_INIT_RAM_content.resetArg);
 
   w25qxx_handle_t* hnd = W25Q128_Init(&hspi3, SPI3_CS_GPIO_Port, SPI3_CS_Pin);
   if (hnd == NULL)
@@ -177,27 +178,38 @@ int main(void)
     .fragmentPubKey = NULL,
   };
 
-  bool appValid = APP_STATUS_Verify(&keys);
+  bool appBinaryOk = APP_STATUS_Verify(&keys);
 
-  if (appValid && (NO_INIT_RAM_content.resetCount > 10U))
+  if (appBinaryOk && (NO_INIT_RAM_content.resetCount >= 10U))
   {
-    printf("Reset loop stopped by anti boot loop detection\r\n");
-    appValid = false;
+    printf("Reset loop stopped by anti boot loop detection. App marked invalid!\r\n");
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.resetCount, 0U);
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_INVALID);
   }
 
   INSTALLER_InitAreas(hnd, &keys);
 
   if (INSTALLER_CheckInstallRequest())
   {
-    appValid = APP_STATUS_Verify(&keys);
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_GOOD);
+    appBinaryOk = APP_STATUS_Verify(&keys);
   }
   else
   {
-    printf("No install requirements\r\n");
+    printf("Nothing installed!\r\n");
   }
 
-  if (appValid)
+  if (appBinaryOk && (NO_INIT_RAM_content.appTag != APP_TAG_INVALID))
   {
+    if (BL_TAG_NEW_INSTALL == NO_INIT_RAM_content.bootloaderTag)
+    {
+      NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.bootloaderTag, BL_TAG_TRYOUT);
+    }
+    else
+    {
+      NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.bootloaderTag, 0U);
+    }
+
     const Metadata_t* metadata = APP_STATUS_GetMetadata();
     APP_STATUS_PrintMetadata(metadata);
     JumpTo(metadata->startAddress);
@@ -207,14 +219,17 @@ int main(void)
     printf("Cannot jump to invalid app!\r\n");
   }
 
-  if (INSTALLER_TryRepair())
+  if (!appBinaryOk && (NO_INIT_RAM_content.appTag != APP_TAG_INVALID))
   {
-    // TODO: Perform reset
-    printf("Firmware repaired!\r\n");
+    if (INSTALLER_TryRepair())
+    {
+      // TODO: Perform reset
+      printf("Firmware repaired!\r\n");
+    }
   }
-  else
+  else if (!appBinaryOk)
   {
-    printf("Unable to repair firmware!\r\n");
+    // TODO: Rescue
   }
 
   /* USER CODE END 2 */

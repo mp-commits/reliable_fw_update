@@ -22,53 +22,44 @@
  *
  * -----------------------------------------------------------------------------
  *
- * metadata.c
+ * keystore.h
  *
- * @brief Metadata of this firmware version. Signatures are generated after build
+ * @brief {Short description of the source file}
 */
+
+#ifndef KEYSTORE_H_
+#define KEYSTORE_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*----------------------------------------------------------------------------*/
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "metadata.h"
-#include "git_hash.h"
-#include <assert.h>
+#include <stdint.h>
 
 /*----------------------------------------------------------------------------*/
-/* MACRO DEFINITIONS                                                          */
+/* PUBLIC FUNCTION DECLARATIONS                                               */
 /*----------------------------------------------------------------------------*/
 
-#define REPEAT8(x) (x),(x),(x),(x),(x),(x),(x),(x)
-#define REPEAT64(x) REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x),\
-                    REPEAT8(x)
+/** 256-bit (32 byte) ed25519 public key
+ * 
+ * @return public key
+ */
+extern const uint8_t* KEYSTORE_GetMetadataPublicKey(void);
 
-/*----------------------------------------------------------------------------*/
-/* VARIABLE DEFINITIONS                                                       */
-/*----------------------------------------------------------------------------*/
+/** 256-bit (32 byte) ed25519 public key
+ * 
+ * @return public key
+ */
+extern const uint8_t* KEYSTORE_GetFragmentPublicKey(void);
 
-extern const uint32_t ISR_VECTOR_START[];
+#ifdef __cplusplus
+} /* extern C */
+#endif
 
-const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
-{
-    .magic = "_M_E_T_A_D_A_T_A",
-    .type = 0xA5A5A5A5U,
-    .version = 1U,
-    .rollbackNumber = 0U,
-    .firmwareId = GIT_HASH,
-    .startAddress = (uint32_t)ISR_VECTOR_START,
-    .firmwareSize = 0x00000000U,
-    .name = "test_firmware_ver1\0\0\0\0\0\0\0\0\0\0\0\0\0",
-    .firmwareSignature = {REPEAT64(0xA5)},
-    .metadataSignature = {REPEAT64(0xDA)}
-};
+/* EoF keystore.h */
 
-_Static_assert(sizeof(FIRMWARE_METADATA) <= 0x200U, "Metadata too large");
-
-/* EoF metadata.c */
+#endif /* KEYSTORE_H_ */

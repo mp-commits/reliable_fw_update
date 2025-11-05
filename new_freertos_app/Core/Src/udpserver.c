@@ -45,10 +45,13 @@
 
 #include "bigendian.h"
 #include "crc32.h"
+#include "keystore.h"
 #include "metadata.h"
 #include "server.h"
 #include "system_reset.h"
 
+#include "ed25519.h"
+#include "sha512.h"
 #include "fragmentstore/fragmentstore.h"
 #include "fragmentstore/command.h"
 #include "updateserver/transfer.h"
@@ -96,14 +99,18 @@ server_addr.sin_addr.s_addr = address;
 /* VARIABLE DEFINITIONS                                                       */
 /*----------------------------------------------------------------------------*/
 
-static bool f_resetRequest;
-static UpdateServer_t f_us;
+static bool             f_resetRequest;
+static UpdateServer_t   f_us;
 static TransferBuffer_t f_tb;
-static FragmentArea_t f_fa[3];
-static Metadata_t f_metadata[3];
-static CommandArea_t f_ca;
-static uint8_t f_memBlock[5 * 1024];
+static FragmentArea_t   f_fa[3];
+static Metadata_t       f_metadata[3];
+static CommandArea_t    f_ca;
+static uint8_t          f_memBlock[5 * 1024];
 static w25qxx_handle_t* f_w25q128 = NULL;
+static uint8_t          f_lastHash[64];
+static size_t           f_lastHashIndex = SIZE_MAX;
+static uint32_t         f_lastHashFwId = 0U;
+static Fragment_t       f_tempFragMem;
 
 /*----------------------------------------------------------------------------*/
 /* PRIVATE FUNCTION DEFINITIONS                                               */
@@ -199,6 +206,54 @@ bool EraseSectors(Address_t address, size_t size)
     return true;
 }
 
+static bool EnsureLastHash(const Fragment_t* next)
+{
+    if ((next->number > 0) &&
+        (next->firmwareId == f_lastHashFwId) &&
+        ((next->number - 1U) == f_lastHashIndex))
+    {
+        /* Last hash value is already up to date */
+        return true;
+    }
+    else
+    {
+        int slot = -1;
+        for (int i = 0; i < 3; i++)
+        {
+            if (f_metadata[i].firmwareId == next->firmwareId)
+            {
+                slot = i;
+                break;
+            }
+        }
+
+        if (slot < 0)
+        {
+            return false;
+        }
+
+        if (0U == next->number)
+        {
+            memcpy(f_lastHash, f_metadata[slot].metadataSignature, 64U);
+            f_lastHashIndex = SIZE_MAX;
+            f_lastHashFwId = f_metadata[slot].firmwareId;
+            return true;
+        }
+        else
+        {
+            const FA_ReturnCode_t ret = FA_ReadFragmentForce(&f_fa[slot], next->number - 1U, &f_tempFragMem);
+            if (ret == FA_ERR_OK)
+            {
+                memcpy(f_lastHash, f_tempFragMem.sha512, 64U);
+                f_lastHashIndex = f_tempFragMem.number;
+                f_lastHashFwId = f_metadata[slot].firmwareId;
+                return true;
+            }
+            return false;
+        }
+    }
+}
+
 /** Validate one fragment
  * 
  * @param frag Pointer to fragment structure
@@ -206,8 +261,42 @@ bool EraseSectors(Address_t address, size_t size)
  */
 bool ValidateFragment(const Fragment_t* frag)
 {
-    (void)frag;
-    return true;
+    const uint8_t* msg = (const uint8_t*)frag;
+    const size_t msgLen = sizeof(Fragment_t) - sizeof(frag->signature);
+
+    if (0U == frag->verifyMethod)
+    {
+        int valid = ed25519_verify(
+            frag->signature,
+            msg,
+            msgLen,
+            KEYSTORE_GetFragmentPublicKey()
+        );
+
+        return 1 == valid;
+    }
+    if (1U == frag->verifyMethod)
+    {
+        if (!EnsureLastHash(frag))
+        {
+            return false;
+        }
+
+        sha512_context ctx;
+        sha512_init(&ctx);
+        sha512_update(&ctx, f_lastHash, sizeof(f_lastHash));
+        sha512_update(&ctx, msg, msgLen);
+        sha512_final(&ctx, f_lastHash);
+        f_lastHashIndex = frag->number;
+        f_lastHashFwId = frag->firmwareId;
+
+        return 0 == memcmp(f_lastHash, frag->signature, 64U);
+    }
+    else
+    {
+        printf("Invalid fragment verification method field: %lu\r\n", frag->verifyMethod);
+        return false;
+    }
 }
 
 /** Validate one fragment
@@ -217,8 +306,15 @@ bool ValidateFragment(const Fragment_t* frag)
  */
 bool ValidateMetadata(const Metadata_t* metadata)
 {
-    (void)metadata;
-    return true;
+    const uint8_t* msg = (const uint8_t*)metadata;
+    const size_t msgLen = sizeof(Metadata_t) - sizeof(metadata->metadataSignature);
+
+    return 1 == ed25519_verify(
+        metadata->metadataSignature,
+        msg,
+        msgLen,
+        KEYSTORE_GetMetadataPublicKey()
+    );
 }
 
 static uint8_t ReadDataById(
@@ -345,23 +441,48 @@ static uint8_t PutMetadata(
         return PROTOCOL_NACK_REQUEST_OUT_OF_RANGE;
     }
 
+    /* Clear hash chain cache */
+    f_lastHashIndex = SIZE_MAX;
+    f_lastHashFwId = 0U;
+
+    const Metadata_t* meta = (const Metadata_t*)data;
+
     // Find usable slot for the incoming metadata
-    size_t slot = 0;
-    for (size_t i = 0; i < 3; i++)
+    int slot = -1;
+    bool alreadyExists = false;
+    for (int i = 0; i < 3; i++)
     {
+        if (MetadataEqual(&f_metadata[i], meta))
+        {
+            /* Incoming metadata already exits */
+            slot = i;
+            alreadyExists = true;
+            break;
+        }
         if (!MetadataEqual(&f_metadata[i], &FIRMWARE_METADATA))
         {
+            /* Ensure we don't overwrite the copy of the current firmware */
             slot = i;
-            break;
         }
     }
 
-    FA_ReturnCode_t code =  FA_WriteMetadata(&f_fa[slot], (const Metadata_t*)data);
+    if (alreadyExists)
+    {
+        printf("Metadata already exists in slot %i\r\n", slot);
+        return PROTOCOL_ACK_OK;
+    }
+    if (slot < 0)
+    {
+        printf("Unable to place metadata in any slot!\r\n");
+        return PROTOCOL_NACK_INTERNAL_ERROR;
+    }
+
+    FA_ReturnCode_t code =  FA_WriteMetadata(&f_fa[slot], meta);
 
     if (code == FA_ERR_OK)
     {
-        (void)memcpy(&f_metadata[slot], (const Metadata_t*)data, sizeof(Metadata_t));
-        printf("Wrote metadata to slot %u\r\n", slot);
+        (void)memcpy(&f_metadata[slot], meta, sizeof(Metadata_t));
+        printf("Wrote metadata to slot %i\r\n", slot);
         return PROTOCOL_ACK_OK;
     }
     else if (code == FA_ERR_BUSY)
@@ -481,10 +602,38 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
         },
     };
 
-    for (size_t i = 0; i < 3; i++)
+    for (int i = 0; i < 3; i++)
     {
         REQUIRE(FA_ERR_OK == FA_InitStruct(&f_fa[i], &memConf[i], ValidateFragment, ValidateMetadata));
-        (void)FA_ReadMetadata(&f_fa[i], &f_metadata[i]);
+        const FA_ReturnCode_t res = FA_ReadMetadata(&f_fa[i], &f_metadata[i]);
+        printf("Slot %i metadata ", i);
+        switch (res)
+        {
+            case FA_ERR_OK:
+                printf("OK\r\n");
+                //FA_EraseArea(&f_fa[i]);
+                break;
+            case FA_ERR_EMPTY:
+                printf("EMPTY\r\n");
+                break;
+            case FA_ERR_INVALID:
+                printf("INVALID\r\n");
+                FA_EraseArea(&f_fa[i]);
+                break;
+            case FA_ERR_BUSY:
+                printf("BUSY\r\n");
+                break;
+            case FA_ERR_PARAM:
+                printf("PARAM\r\n");
+                break;
+        default:
+            break;
+        }
+
+        if (res != FA_ERR_OK)
+        {
+            memset(&f_metadata[i], 0, sizeof(Metadata_t));
+        }
     }
     REQUIRE(CA_InitStruct(&f_ca, &memConf[3], &InlineCrc32));
     REQUIRE(US_InitServer(&f_us, ReadDataById, WriteDataById, PutMetadata, PutFragment));
@@ -493,7 +642,7 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
     int sock;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    uint8_t packet[1472];
+    static uint8_t packet[1472];
     int recvLen;
 
     sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);

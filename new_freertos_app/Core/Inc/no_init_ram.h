@@ -48,8 +48,10 @@ typedef struct
 {
     uint32_t resetCount;
     uint32_t appTag;
+    uint32_t bootloaderTag;
+    uint32_t resetArg;
 
-    uint32_t reserved[13];
+    uint32_t reserved[11];
 
     uint32_t crc;
 } NoInitRamContent_t;

@@ -67,6 +67,8 @@ extern const Metadata_t* APP_STATUS_GetMetadata(void);
 
 extern bool APP_STATUS_LastVerifyResult(void);
 
+extern bool APP_STATUS_LastMetadataVerifyResult(void);
+
 extern void APP_STATUS_PrintMetadata(const Metadata_t* metadata);
 
 #ifdef __cplusplus
