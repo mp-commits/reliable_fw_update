@@ -59,8 +59,6 @@ extern "C" {
 
 extern void SERVER_UdpUpdateServer(w25qxx_handle_t* arg);
 
-extern void SERVER_TcpEchoTask(void* arg);
-
 extern void SERVER_NotifyCallback(void);
 
 #ifdef __cplusplus

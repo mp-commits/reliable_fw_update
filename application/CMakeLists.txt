@@ -56,7 +56,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/keystore.c
     Core/Src/metadata.c
     Core/Src/no_init_ram.c
-    Core/Src/tcpserver.c
     Core/Src/udpserver.c
     Core/Src/system_reset.c
     Core/Src/w25qxx_init.c
