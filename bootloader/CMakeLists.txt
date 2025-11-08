@@ -19,7 +19,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME new_bootloader)
+set(CMAKE_PROJECT_NAME bootloader)
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
