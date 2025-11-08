@@ -91,12 +91,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   (void)GPIO_Pin;
   printf("Bootloader button interrupt\r\n");
+  memset(&NO_INIT_RAM_content, 0, sizeof(NO_INIT_RAM_content));
+  printf("No init ram cleared\r\n");
 }
 
 static void JumpTo(uint32_t address)
 {
-  printf("Jumping to application\r\n");
-  
   uint32_t app_stack = *(__IO uint32_t*)address;
   uint32_t app_reset_handler = *(__IO uint32_t*)(address + 4);
 
@@ -114,10 +114,8 @@ static void JumpTo(uint32_t address)
 
   SCB->VTOR = address;
 
-  __set_MSP(app_stack);
-
-  pFunction app_entry = (pFunction)app_reset_handler;
-  app_entry();
+  asm volatile ("" ::: "memory");
+  asm volatile ("msr msp, %0; bx %1;" : : "r"(app_stack), "r"(app_reset_handler));
 }
 
 /* USER CODE END 0 */
@@ -179,6 +177,10 @@ int main(void)
   };
 
   bool appBinaryOk = APP_STATUS_Verify(&keys);
+  bool rescueBinaryOk = RESCUE_STATUS_Verify(&keys);
+
+  printf("APPLICATION BINARY IS %s\r\n", appBinaryOk ? "OK" : "NOT OK");
+  printf("RESCUE BINARY IS %s\r\n", rescueBinaryOk ? "OK" : "NOT OK");
 
   if (appBinaryOk && (NO_INIT_RAM_content.resetCount >= 10U))
   {
@@ -227,9 +229,12 @@ int main(void)
       printf("Firmware repaired!\r\n");
     }
   }
-  else if (!appBinaryOk)
+
+  if (!appBinaryOk && rescueBinaryOk)
   {
-    // TODO: Rescue
+    const Metadata_t* metadata = RESCUE_STATUS_GetMetadata();
+    APP_STATUS_PrintMetadata(metadata);
+    JumpTo(metadata->startAddress);
   }
 
   /* USER CODE END 2 */

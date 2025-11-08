@@ -51,7 +51,8 @@ extern "C" {
 
 #define APP_METADATA_ADDRESS  0x08010000U
 #define FIRST_FLASH_ADDRESS   (APP_METADATA_ADDRESS + sizeof(Metadata_t))
-#define LAST_FLASH_ADDRESS    (0x82000000U)
+#define LAST_FLASH_ADDRESS    (0x08200000U)
+#define RESCUE_METADATA_ADDRESS     0x081C0000U
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC VARIABLE DEFINITIONS                                                */
@@ -70,6 +71,10 @@ extern bool APP_STATUS_LastVerifyResult(void);
 extern bool APP_STATUS_LastMetadataVerifyResult(void);
 
 extern void APP_STATUS_PrintMetadata(const Metadata_t* metadata);
+
+extern bool RESCUE_STATUS_Verify(const KeyContainer_t* keys);
+
+extern const Metadata_t* RESCUE_STATUS_GetMetadata(void);
 
 #ifdef __cplusplus
 } /* extern C */

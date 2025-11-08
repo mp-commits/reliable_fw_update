@@ -208,7 +208,6 @@ w25qxx_handle_t* W25Q128_Init(SPI_HandleTypeDef* hspi, GPIO_TypeDef* csPort, uin
     ASSERT_0(w25qxx_set_type(&f_impl.w25q128, W25Q128));
     ASSERT_0(w25qxx_set_interface(&f_impl.w25q128, W25QXX_INTERFACE_SPI));
     ASSERT_0(w25qxx_set_dual_quad_spi(&f_impl.w25q128, W25QXX_BOOL_FALSE));
-    printf("w25qxx_init\r\n");
     ASSERT_0(w25qxx_init(&f_impl.w25q128));
 
     return &f_impl.w25q128;

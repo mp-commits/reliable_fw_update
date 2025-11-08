@@ -117,7 +117,6 @@ static bool IsApplicationValid(const Metadata_t* metadata, const uint8_t* public
         return stackPointerValid && programCounterValid;
     }
 
-    printf("Firmware signature verification failed!\r\n");
     return false;
 }
 
@@ -140,14 +139,6 @@ bool APP_STATUS_Verify(const KeyContainer_t* keys)
             f_valid = true;
             return true;
         }
-        else
-        {
-            printf("No valid application\r\n");
-        }
-    }
-    else
-    {
-        printf("No valid metadata\r\n");
     }
 
     return false;
@@ -192,6 +183,26 @@ void APP_STATUS_PrintMetadata(const Metadata_t* metadata)
     printf("Firmware name:            %s\r\n", nameStr);
     printf("Firmware signature CRC32: 0x%lX\r\n", fwSignCrc);
     printf("Metadata signature CRC32: 0x%lX\r\n", metaSignCrc);
+}
+
+bool RESCUE_STATUS_Verify(const KeyContainer_t* keys)
+{
+    const Metadata_t* metadata = (const Metadata_t*)RESCUE_METADATA_ADDRESS;
+
+    if (IsMetadataValid(metadata, keys->metadataPubKey))
+    {
+        if (IsApplicationValid(metadata, keys->firmwarePubKey))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const Metadata_t* RESCUE_STATUS_GetMetadata(void)
+{
+    return (const Metadata_t*)RESCUE_METADATA_ADDRESS;
 }
 
 /* EoF app_status.c */
