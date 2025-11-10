@@ -46,7 +46,7 @@ extern "C" {
 /* PUBLIC MACRO DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
 
-#define ENABLE_RESCUE_PARTITION
+// #define ENABLE_RESCUE_PARTITION
 
 #define APP_METADATA_ADDRESS        (0x08010000U)
 #define FIRST_FLASH_ADDRESS         (APP_METADATA_ADDRESS + sizeof(Metadata_t))

@@ -53,7 +53,10 @@
 
 static bool f_metadataOk = false;
 static bool f_valid = false;
+
+#ifdef ENABLE_RESCUE_PARTITION
 static bool f_rescueValid = false;
+#endif
 
 /*----------------------------------------------------------------------------*/
 /* PRIVATE FUNCTION DEFINITIONS                                               */
@@ -202,6 +205,7 @@ bool RESCUE_STATUS_Verify(const KeyContainer_t* keys)
 
     return false;
 #else
+    (void)keys;
     return f_valid;
 #endif
 }

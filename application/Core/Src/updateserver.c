@@ -641,8 +641,7 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
         switch (res)
         {
             case FA_ERR_OK:
-                printf("OK\r\n");
-                //FA_EraseArea(&f_fa[i]);
+                printf("%s\r\n", (f_metadata[i].type == APP_TYPE_RESCUE) ? "RESCUE" : "FIRMWARE");
                 break;
             case FA_ERR_EMPTY:
                 printf("EMPTY\r\n");

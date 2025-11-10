@@ -613,6 +613,12 @@ static bool InstallAllowed(const Metadata_t* target, bool automatic)
         return true;
     }
 
+    if ((target->type != APP_TYPE_RESCUE) &&
+        (app->type == APP_TYPE_RESCUE))
+    {
+        return true;
+    }
+
     return false;
 }
 
@@ -840,11 +846,17 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
         REQUIRE_V(FA_ERR_OK == FA_InitStruct(&f_slots[i].fa, &memConfs[i], ValidateFragment, ValidateMetadata));
         if (VerifySlotContent(&f_slots[i]))
         {
-            printf("Fragment area at %lX contains a valid firmware\r\n", memConfs[i].baseAddress);
+            printf(
+                "Install slot %i contains a valid %s\r\n",
+                i,
+                (f_slots[i].metadata.type == APP_TYPE_RESCUE)
+                    ? "rescue app"
+                    : "firmware"
+            );
         }
         else
         {
-            printf("Fragment area at %lX does not contain a valid firmware\r\n", memConfs[i].baseAddress);
+            printf("Install slot %i does not contain a valid binary\r\n", i);
         }
     }
 

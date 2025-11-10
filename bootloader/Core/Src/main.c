@@ -228,8 +228,11 @@ int main(void)
   {
     if (INSTALLER_TryRepair())
     {
-      // TODO: Perform reset
       printf("Firmware repaired!\r\n");
+      NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_GOOD);
+      const Metadata_t* metadata = APP_STATUS_GetMetadata();
+      APP_STATUS_PrintMetadata(metadata);
+      JumpTo(metadata->startAddress);
     }
   }
 
