@@ -318,7 +318,9 @@ static bool VerifySlotContent(InstallSlot_t* slot)
 
         slot->lastFragIdx = lastIdx;
 
-        uint32_t nextStart = FIRST_FLASH_ADDRESS;
+        uint32_t nextStart = (meta->type == APP_TYPE_RESCUE)
+            ? RESCUE_DATA_BEGIN
+            : FIRST_FLASH_ADDRESS;
 
         for (size_t i = 0; i <= lastIdx; i++)
         {
@@ -585,12 +587,18 @@ static bool EmptyMetadata(const Metadata_t* m)
 
 static bool InstallAllowed(const Metadata_t* target, bool automatic)
 {
-    if (!APP_STATUS_LastVerifyResult())
+    const Metadata_t* app = (target->type == APP_TYPE_RESCUE)
+        ? RESCUE_STATUS_GetMetadata()
+        : APP_STATUS_GetMetadata();
+
+    const bool appValid = (target->type == APP_TYPE_RESCUE)
+        ? RESCUE_STATUS_LastVerifyResult()
+        : APP_STATUS_LastVerifyResult();
+
+    if (!appValid)
     {
         return true;
     }
-
-    const Metadata_t* app = APP_STATUS_GetMetadata();
 
     if (automatic && 
         (target->type == app->type) &&

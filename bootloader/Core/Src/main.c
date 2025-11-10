@@ -234,8 +234,9 @@ int main(void)
   }
 
 #ifdef ENABLE_RESCUE_PARTITION
-  if (!appBinaryOk && rescueBinaryOk)
+  if (rescueBinaryOk)
   {
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_GOOD);
     const Metadata_t* metadata = RESCUE_STATUS_GetMetadata();
     APP_STATUS_PrintMetadata(metadata);
     JumpTo(metadata->startAddress);
@@ -245,6 +246,7 @@ int main(void)
   const bool rescueOk = INSTALLER_TryInstallRescueApp(&meta);
   if (rescueOk && (meta != NULL))
   {
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_GOOD);
     APP_STATUS_PrintMetadata(meta);
     JumpTo(meta->startAddress);
   }

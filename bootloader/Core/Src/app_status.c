@@ -53,6 +53,7 @@
 
 static bool f_metadataOk = false;
 static bool f_valid = false;
+static bool f_rescueValid = false;
 
 /*----------------------------------------------------------------------------*/
 /* PRIVATE FUNCTION DEFINITIONS                                               */
@@ -187,22 +188,36 @@ void APP_STATUS_PrintMetadata(const Metadata_t* metadata)
 
 bool RESCUE_STATUS_Verify(const KeyContainer_t* keys)
 {
+#ifdef ENABLE_RESCUE_PARTITION
     const Metadata_t* metadata = (const Metadata_t*)RESCUE_METADATA_ADDRESS;
 
     if (IsMetadataValid(metadata, keys->metadataPubKey))
     {
         if (IsApplicationValid(metadata, keys->firmwarePubKey))
         {
+            f_rescueValid = true;
             return true;
         }
     }
 
     return false;
+#else
+    return f_valid;
+#endif
 }
 
 const Metadata_t* RESCUE_STATUS_GetMetadata(void)
 {
     return (const Metadata_t*)RESCUE_METADATA_ADDRESS;
+}
+
+bool RESCUE_STATUS_LastVerifyResult(void)
+{
+#ifdef ENABLE_RESCUE_PARTITION
+    return f_rescueValid;
+#else
+    return f_valid;
+#endif
 }
 
 /* EoF app_status.c */

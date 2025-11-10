@@ -72,6 +72,8 @@ extern bool RESCUE_STATUS_Verify(const KeyContainer_t* keys);
 
 extern const Metadata_t* RESCUE_STATUS_GetMetadata(void);
 
+extern bool RESCUE_STATUS_LastVerifyResult(void);
+
 #ifdef __cplusplus
 } /* extern C */
 #endif

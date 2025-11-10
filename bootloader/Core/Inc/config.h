@@ -55,9 +55,11 @@ extern "C" {
 #ifdef ENABLE_RESCUE_PARTITION
 // Rescue partition enabled address
 #define RESCUE_METADATA_ADDRESS     (0x081C0000U)
+#define RESCUE_DATA_BEGIN           (RESCUE_METADATA_ADDRESS + sizeof(Metadata_t))
 #else
 // Rescue partition disable address == app address
 #define RESCUE_METADATA_ADDRESS     (0x08010000U)
+#define RESCUE_DATA_BEGIN           (RESCUE_METADATA_ADDRESS + sizeof(Metadata_t))
 #endif
 
 /*----------------------------------------------------------------------------*/
