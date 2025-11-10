@@ -42,7 +42,7 @@ add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(cmake/stm32cubemx)
 
 add_subdirectory(../common ${CMAKE_CURRENT_BINARY_DIR}/common)
-add_subdirectory($ENV{FW_UPDATE_LIBS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/FwUpdateLibs)
+add_subdirectory(../FwUpdateLibs ${CMAKE_CURRENT_BINARY_DIR}/FwUpdateLibs)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
