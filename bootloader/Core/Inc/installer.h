@@ -40,6 +40,7 @@ extern "C" {
 
 #include "driver_w25qxx.h"
 #include "keys.h"
+#include "fragmentstore/fragmentstore.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -64,6 +65,8 @@ extern void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* 
 extern bool INSTALLER_CheckInstallRequest(void);
 
 extern bool INSTALLER_TryRepair(void);
+
+extern bool INSTALLER_TryInstallRescueApp(const Metadata_t** out);
 
 #ifdef __cplusplus
 } /* extern C */

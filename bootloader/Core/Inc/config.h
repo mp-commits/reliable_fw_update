@@ -22,13 +22,13 @@
  *
  * -----------------------------------------------------------------------------
  *
- * app_status.h
+ * config.h
  *
- * @brief {Short description of the source file}
+ * @brief Bootloader build config
 */
 
-#ifndef APP_STATUS_H_
-#define APP_STATUS_H_
+#ifndef CONFIG_H_
+#define CONFIG_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,10 +38,6 @@ extern "C" {
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
-#include "config.h"
-#include "keys.h"
-#include "fragmentstore/fragmentstore.h"
-
 /*----------------------------------------------------------------------------*/
 /* PUBLIC TYPE DEFINITIONS                                                    */
 /*----------------------------------------------------------------------------*/
@@ -49,6 +45,20 @@ extern "C" {
 /*----------------------------------------------------------------------------*/
 /* PUBLIC MACRO DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
+
+#define ENABLE_RESCUE_PARTITION
+
+#define APP_METADATA_ADDRESS        (0x08010000U)
+#define FIRST_FLASH_ADDRESS         (APP_METADATA_ADDRESS + sizeof(Metadata_t))
+#define LAST_FLASH_ADDRESS          (0x08200000U)
+
+#ifdef ENABLE_RESCUE_PARTITION
+// Rescue partition enabled address
+#define RESCUE_METADATA_ADDRESS     (0x081C0000U)
+#else
+// Rescue partition disable address == app address
+#define RESCUE_METADATA_ADDRESS     (0x08010000U)
+#endif
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC VARIABLE DEFINITIONS                                                */
@@ -58,24 +68,11 @@ extern "C" {
 /* PUBLIC FUNCTION DECLARATIONS                                               */
 /*----------------------------------------------------------------------------*/
 
-extern bool APP_STATUS_Verify(const KeyContainer_t* keys);
-
-extern const Metadata_t* APP_STATUS_GetMetadata(void);
-
-extern bool APP_STATUS_LastVerifyResult(void);
-
-extern bool APP_STATUS_LastMetadataVerifyResult(void);
-
-extern void APP_STATUS_PrintMetadata(const Metadata_t* metadata);
-
-extern bool RESCUE_STATUS_Verify(const KeyContainer_t* keys);
-
-extern const Metadata_t* RESCUE_STATUS_GetMetadata(void);
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF app_status.h */
+/* EoF config.h */
 
-#endif /* APP_STATUS_H_ */
+#endif /* CONFIG_H_ */

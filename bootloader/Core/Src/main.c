@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "config.h"
 #include "app_status.h"
 #include "stdio.h"
 #include "stdbool.h"
@@ -177,10 +178,12 @@ int main(void)
   };
 
   bool appBinaryOk = APP_STATUS_Verify(&keys);
-  bool rescueBinaryOk = RESCUE_STATUS_Verify(&keys);
-
   printf("APPLICATION BINARY IS %s\r\n", appBinaryOk ? "OK" : "NOT OK");
+
+#ifdef ENABLE_RESCUE_PARTITION
+  bool rescueBinaryOk = RESCUE_STATUS_Verify(&keys);
   printf("RESCUE BINARY IS %s\r\n", rescueBinaryOk ? "OK" : "NOT OK");
+#endif
 
   if (appBinaryOk && (NO_INIT_RAM_content.resetCount >= 10U))
   {
@@ -230,13 +233,22 @@ int main(void)
     }
   }
 
+#ifdef ENABLE_RESCUE_PARTITION
   if (!appBinaryOk && rescueBinaryOk)
   {
     const Metadata_t* metadata = RESCUE_STATUS_GetMetadata();
     APP_STATUS_PrintMetadata(metadata);
     JumpTo(metadata->startAddress);
   }
-
+#else
+  const Metadata_t* meta = NULL;
+  const bool rescueOk = INSTALLER_TryInstallRescueApp(&meta);
+  if (rescueOk && (meta != NULL))
+  {
+    APP_STATUS_PrintMetadata(meta);
+    JumpTo(meta->startAddress);
+  }
+#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */

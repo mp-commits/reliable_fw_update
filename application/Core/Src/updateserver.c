@@ -44,6 +44,7 @@
 #include "lwip/sys.h"
 #include "lwip/api.h"
 
+#include "app_types.h"
 #include "bigendian.h"
 #include "crc32.h"
 #include "keystore.h"
@@ -431,6 +432,50 @@ static uint8_t WriteDataById(
     }
 }
 
+static int FindSlotForMetadata(const Metadata_t* in, bool* alreadyExists)
+{
+    int slot = -1;
+    if (in->type == APP_TYPE_RESCUE)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            if (f_metadata[i].type == APP_TYPE_RESCUE)
+            {
+                /* Always replace the existing rescue image */
+                slot = i;
+                *alreadyExists = MetadataEqual(in, &f_metadata[i]);
+                break;
+            }
+            if (!MetadataEqual(&f_metadata[i], &FIRMWARE_METADATA))
+            {
+                /* If rescue app doesn't already exist */
+                /* Ensure we don't overwrite the copy of the current firmware or the rescue firmware */
+                slot = i;
+            }
+        }
+    }
+    else
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            if (MetadataEqual(&f_metadata[i], in))
+            {
+                /* Incoming metadata already exits */
+                slot = i;
+                *alreadyExists = true;
+                break;
+            }
+            if (!MetadataEqual(&f_metadata[i], &FIRMWARE_METADATA) &&
+                (f_metadata[i].type != APP_TYPE_RESCUE))
+            {
+                /* Ensure we don't overwrite the copy of the current firmware or the rescue firmware */
+                slot = i;
+            }
+        }
+    }
+    return slot;
+}
+
 static uint8_t PutMetadata(
     const uint8_t* data, 
     size_t size)
@@ -449,23 +494,8 @@ static uint8_t PutMetadata(
     const Metadata_t* meta = (const Metadata_t*)data;
 
     // Find usable slot for the incoming metadata
-    int slot = -1;
     bool alreadyExists = false;
-    for (int i = 0; i < 3; i++)
-    {
-        if (MetadataEqual(&f_metadata[i], meta))
-        {
-            /* Incoming metadata already exits */
-            slot = i;
-            alreadyExists = true;
-            break;
-        }
-        if (!MetadataEqual(&f_metadata[i], &FIRMWARE_METADATA))
-        {
-            /* Ensure we don't overwrite the copy of the current firmware */
-            slot = i;
-        }
-    }
+    int slot = FindSlotForMetadata(meta, &alreadyExists);
 
     if (alreadyExists)
     {

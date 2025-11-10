@@ -32,6 +32,7 @@
 /*----------------------------------------------------------------------------*/
 
 #include "app_status.h"
+#include "app_types.h"
 #include "crc32.h"
 #include "installer.h"
 #include "fragmentstore/command.h"
@@ -147,6 +148,11 @@ static_assert(member_size(Fragment_t, signature) == 64U, "Signature size must be
 /*----------------------------------------------------------------------------*/
 /* CALLBACKS FOR FRAGMENT AREAS                                               */
 /*----------------------------------------------------------------------------*/
+
+static inline bool MetadataEqual(const Metadata_t* a, const Metadata_t* b)
+{
+    return 0 == memcmp(a, b, sizeof(Metadata_t));
+}
 
 static bool VerifyMemory(Address_t address, size_t size, const uint8_t* cmp)
 {
@@ -525,18 +531,22 @@ static bool InstallFrom(InstallSlot_t* slot)
     Metadata_t* meta = &slot->metadata;
     Fragment_t* frag = &slot->fragMem;
 
+    const uint32_t metadataAddress = (meta->type == APP_TYPE_RESCUE)
+        ? RESCUE_METADATA_ADDRESS
+        : APP_METADATA_ADDRESS;
+
     if (!ValidateMetadata(meta))
     {
         printf("Install target metadata reverification failed!\r\n");
         return false;
     }
 
-    if (!EraseRequiredSectors(APP_METADATA_ADDRESS, slot->highestAddr))
+    if (!EraseRequiredSectors(metadataAddress, slot->highestAddr))
     {
         return false;
     }
 
-    if (!ProgramFlash(APP_METADATA_ADDRESS, (const uint8_t*)meta, sizeof(Metadata_t)))
+    if (!ProgramFlash(metadataAddress, (const uint8_t*)meta, sizeof(Metadata_t)))
     {
         return false;
     }
@@ -692,6 +702,13 @@ static bool ExecuteRollbackCommand(Metadata_t* metaArg, bool automaticRollback)
             REQUIRE_B(CA_SetStatus(&f_ca, COMMAND_STATE_FAILED));
             return false;
         }
+    }
+
+    if (APP_STATUS_LastVerifyResult() &&
+        MetadataEqual(metaArg, APP_STATUS_GetMetadata()))
+    {
+        printf("Unable to perform rollback to the same version as currently installed!\r\n");
+        return false;
     }
 
     for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
@@ -876,11 +893,27 @@ bool INSTALLER_CheckInstallRequest(void)
 
 bool INSTALLER_TryRepair(void)
 {
-    if (APP_STATUS_LastMetadataVerifyResult())
+    if (APP_STATUS_LastMetadataVerifyResult() &&
+        !APP_STATUS_LastVerifyResult())
     {
+        /* Try repairing the current application if the metadata was ok */
+        /* but content was not */
         return ExecuteInstallCommand(APP_STATUS_GetMetadata());
     }
 
+    return false;
+}
+
+bool INSTALLER_TryInstallRescueApp(const Metadata_t** out)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
+    {
+        if (f_slots[i].valid && f_slots[i].metadata.type == APP_TYPE_RESCUE)
+        {
+            *out = &f_slots[i].metadata;
+            return InstallFrom(&f_slots[i]);
+        }
+    }
     return false;
 }
 
