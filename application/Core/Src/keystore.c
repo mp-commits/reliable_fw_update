@@ -24,50 +24,31 @@
  *
  * keystore.c
  *
- * @brief {Short description of the source file}
+ * @brief Module to provide keys for update process
 */
 
 /*----------------------------------------------------------------------------*/
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
+#include "assert.h"
 #include "keystore.h"
+#include "generated_public_key.h"
 
-/*----------------------------------------------------------------------------*/
-/* PRIVATE TYPE DEFINITIONS                                                   */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* MACRO DEFINITIONS                                                          */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* VARIABLE DEFINITIONS                                                       */
-/*----------------------------------------------------------------------------*/
-
-static const uint8_t PUBLIC_KEY[32] = {
-    0x8f, 0x0d, 0xeb, 0x67, 0xb9, 0xfa, 0x75, 0xc5,
-    0x68, 0x25, 0x00, 0x19, 0x86, 0x16, 0x91, 0xaf,
-    0x6e, 0x00, 0x0b, 0x74, 0x64, 0x9f, 0xb3, 0xc0,
-    0x5d, 0x8f, 0x65, 0x13, 0x9f, 0x0d, 0x65, 0x67
-};
-
-/*----------------------------------------------------------------------------*/
-/* PRIVATE FUNCTION DEFINITIONS                                               */
-/*----------------------------------------------------------------------------*/
+static_assert(sizeof(generated_public_key) == 32U, "Generated public key must be 32 bytes!");
 
 /*----------------------------------------------------------------------------*/
 /* PUBLIC FUNCTION DEFINITIONS                                                */
 /*----------------------------------------------------------------------------*/
 
-extern const uint8_t* KEYSTORE_GetMetadataPublicKey(void)
+const uint8_t* KEYSTORE_GetMetadataPublicKey(void)
 {
-    return PUBLIC_KEY;
+    return generated_public_key;
 }
 
-extern const uint8_t* KEYSTORE_GetFragmentPublicKey(void)
+const uint8_t* KEYSTORE_GetFragmentPublicKey(void)
 {
-    return PUBLIC_KEY;
+    return generated_public_key;
 }
 
 /* EoF keystore.c */

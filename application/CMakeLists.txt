@@ -63,6 +63,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_BINARY_DIR}
 )
 
 # Add project symbols (macros)
@@ -80,6 +81,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     libs::updateserver
     libs::ed25519
 )
+
+add_custom_target(generated_key_file
+    COMMAND generate_keyfile -i $ENV{FW_SIGNING_KEY} -o ${CMAKE_BINARY_DIR}/generated_public_key.h
+)
+add_dependencies(${PROJECT_NAME} generated_key_file)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex

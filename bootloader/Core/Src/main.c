@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "generated_public_key.h"
 #include "config.h"
 #include "app_status.h"
 #include "stdio.h"
@@ -57,13 +58,6 @@ TIM_HandleTypeDef htim1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
-static const uint8_t PUBLIC_KEY[32] = {
-    0x8f, 0x0d, 0xeb, 0x67, 0xb9, 0xfa, 0x75, 0xc5,
-    0x68, 0x25, 0x00, 0x19, 0x86, 0x16, 0x91, 0xaf,
-    0x6e, 0x00, 0x0b, 0x74, 0x64, 0x9f, 0xb3, 0xc0,
-    0x5d, 0x8f, 0x65, 0x13, 0x9f, 0x0d, 0x65, 0x67
-};
 
 /* USER CODE END PV */
 
@@ -172,9 +166,9 @@ int main(void)
   }
 
   KeyContainer_t keys = {
-    .metadataPubKey = PUBLIC_KEY,
-    .firmwarePubKey = PUBLIC_KEY,
-    .fragmentPubKey = NULL,
+    .metadataPubKey = generated_public_key,
+    .firmwarePubKey = generated_public_key,
+    .fragmentPubKey = generated_public_key,
   };
 
   bool appBinaryOk = APP_STATUS_Verify(&keys);
