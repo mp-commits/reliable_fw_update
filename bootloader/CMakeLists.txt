@@ -40,6 +40,7 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+add_subdirectory(../common ${CMAKE_CURRENT_BINARY_DIR}/common)
 add_subdirectory($ENV{FW_UPDATE_LIBS_DIR} ${CMAKE_CURRENT_BINARY_DIR}/FwUpdateLibs)
 
 # Link directories setup
@@ -51,9 +52,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/app_status.c
-    Core/Src/driver_w25qxx.c
     Core/Src/installer.c
-    Core/Src/no_init_ram.c
     Core/Src/w25qxx_init.c
 )
 
@@ -72,6 +71,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
+    libs::common
     libs::fragmentstore
     libs::ed25519
 )

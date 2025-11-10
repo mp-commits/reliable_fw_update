@@ -22,50 +22,29 @@
  *
  * -----------------------------------------------------------------------------
  *
- * crc32.h
+ * app_types.h
  *
- * @brief Simple and slow CRC32 function
+ * @brief 32-bit identifiers for different application types
 */
 
-#ifndef CRC32_H_
-#define CRC32_H_
+#ifndef APP_TYPES_H_
+#define APP_TYPES_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*----------------------------------------------------------------------------*/
-/* INCLUDE DIRECTIVES                                                         */
+/* PUBLIC MACRO DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
 
-#include <stdint.h>
-#include <stddef.h>
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC FUNCTION DECLARATIONS                                               */
-/*----------------------------------------------------------------------------*/
-
-static inline uint32_t InlineCrc32(const uint8_t* data, size_t size)
-{
-  uint32_t r = ~0; const uint8_t *end = data + size;
- 
-  while(data < end)
-  {
-    r ^= *data++;
- 
-    for(int i = 0; i < 8; i++)
-    {
-      uint32_t t = ~((r&1) - 1); r = (r>>1) ^ (0xEDB88320 & t);
-    }
-  }
- 
-  return ~r;
-}
+#define APP_TYPE_FIRMWARE   (0xA5A5A5A5U)
+#define APP_TYPE_RESCUE     (0x51515151U)
 
 #ifdef __cplusplus
 } /* extern C */
 #endif
 
-/* EoF crc32.h */
+/* EoF app_types.h */
 
-#endif /* CRC32_H_ */
+#endif /* APP_TYPES_H_ */
