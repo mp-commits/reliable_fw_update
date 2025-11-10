@@ -31,6 +31,7 @@
 /* INCLUDE DIRECTIVES                                                         */
 /*----------------------------------------------------------------------------*/
 
+#include "app_types.h"
 #include "metadata.h"
 #include "git_hash.h"
 #include <assert.h>
@@ -58,7 +59,7 @@ extern const uint32_t ISR_VECTOR_START[];
 const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
 {
     .magic = "_M_E_T_A_D_A_T_A",
-    .type = 0xA5A5A5A5U,
+    .type = APP_TYPE_FIRMWARE,
     .version = 1U,
     .rollbackNumber = 0U,
     .firmwareId = GIT_HASH,
