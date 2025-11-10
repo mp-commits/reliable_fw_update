@@ -55,7 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/bigendian.c
     Core/Src/keystore.c
     Core/Src/metadata.c
-    Core/Src/udpserver.c
+    Core/Src/updateserver.c
     Core/Src/system_reset.c
     Core/Src/w25qxx_init.c
 )

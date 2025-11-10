@@ -22,9 +22,10 @@
  *
  * -----------------------------------------------------------------------------
  *
- * udpserver.c
+ * updateserver.c
  *
- * @brief {Short description of the source file}
+ * @brief Example implementation of UDP based update server utilizing
+ *        FwUpdateLibs libraries
 */
 
 /*----------------------------------------------------------------------------*/
