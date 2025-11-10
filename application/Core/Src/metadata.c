@@ -59,13 +59,13 @@ extern const uint32_t ISR_VECTOR_START[];
 const Metadata_t FIRMWARE_METADATA __attribute__((section (".metadata"))) = 
 {
     .magic = "_M_E_T_A_D_A_T_A",
-    .type = DEFAULT_APP_TYPE_FIRMWARE,
+    .type = DEFAULT_APP_TYPE_RESCUE,
     .version = 2U,
     .rollbackNumber = 1U,
     .firmwareId = GIT_HASH,
     .startAddress = (uint32_t)ISR_VECTOR_START,
     .firmwareSize = 0x00000000U,
-    .name = "test_firmware_ver2\0\0\0\0\0\0\0\0\0\0\0\0\0",
+    .name = "rescue_app_replacing_firmware1\0\0",
     .firmwareSignature = {REPEAT64(0xA5)},
     .metadataSignature = {REPEAT64(0xDA)}
 };
