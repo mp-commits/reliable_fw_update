@@ -585,7 +585,7 @@ static bool EmptyMetadata(const Metadata_t* m)
     return true;
 }
 
-static bool InstallAllowed(const Metadata_t* target, bool automatic)
+static bool InstallAllowed(const Metadata_t* target, bool automaticRollback)
 {
     const Metadata_t* app = (target->type == APP_TYPE_RESCUE)
         ? RESCUE_STATUS_GetMetadata()
@@ -600,9 +600,9 @@ static bool InstallAllowed(const Metadata_t* target, bool automatic)
         return true;
     }
 
-    if (automatic && 
+    if (automaticRollback && 
         (target->type == app->type) &&
-        (NO_INIT_RAM_content.bootloaderTag == BL_TAG_TRYOUT))
+        (NO_INIT_RAM_content.installTag == APP_TAG_TRYOUT))
     {
         return true;
     }
@@ -690,8 +690,6 @@ static bool ExecuteInstallCommand(const Metadata_t* metaArg)
     {
         return CA_EraseInstallCommand(&f_ca);
     }
-
-    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.bootloaderTag, BL_TAG_NEW_INSTALL);
 
     return false;
 }

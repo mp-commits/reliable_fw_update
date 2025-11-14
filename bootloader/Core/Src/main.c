@@ -191,24 +191,21 @@ int main(void)
   if (INSTALLER_CheckInstallRequest())
   {
     NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.appTag, APP_TAG_GOOD);
+    #ifdef ENABLE_INSTALL_TRYOUT
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.installTag, APP_TAG_TRYOUT);
+    #else
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.installTag, 0U);
+    #endif
     appBinaryOk = APP_STATUS_Verify(&keys);
   }
   else
   {
+    NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.installTag, 0U);
     printf("Nothing installed!\r\n");
   }
 
   if (appBinaryOk && (NO_INIT_RAM_content.appTag != APP_TAG_INVALID))
   {
-    if (BL_TAG_NEW_INSTALL == NO_INIT_RAM_content.bootloaderTag)
-    {
-      NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.bootloaderTag, BL_TAG_TRYOUT);
-    }
-    else
-    {
-      NO_INIT_RAM_SetMember(&NO_INIT_RAM_content.bootloaderTag, 0U);
-    }
-
     const Metadata_t* metadata = APP_STATUS_GetMetadata();
     APP_STATUS_PrintMetadata(metadata);
     JumpTo(metadata->startAddress);

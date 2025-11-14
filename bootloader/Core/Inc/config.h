@@ -35,18 +35,24 @@ extern "C" {
 #endif
 
 /*----------------------------------------------------------------------------*/
-/* INCLUDE DIRECTIVES                                                         */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC TYPE DEFINITIONS                                                    */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
 /* PUBLIC MACRO DEFINITIONS                                                   */
 /*----------------------------------------------------------------------------*/
 
-// #define ENABLE_RESCUE_PARTITION
+/** Defined:    Enable optional rescue partition.
+ * 
+ *  Undefined:  Optional rescue partition disabled. Rescue is installed
+ *              from a fragment store if available.
+ */
+#define ENABLE_RESCUE_PARTITION
+
+/** Defined:    Enable install tryout. Rollback counter is ignored after first
+ *              boot with new firmware. == automatic rollback to previous version
+ *              if the first boot fails regardless of the anti-rollback counter value.
+ * 
+ * Undefined:   Anti-rollback counter is always respected. If boot with new install
+ *              fails, the rescue firmware is required to boot an application.
+ */
+#define ENABLE_INSTALL_TRYOUT
 
 #define APP_METADATA_ADDRESS        (0x08010000U)
 #define FIRST_FLASH_ADDRESS         (APP_METADATA_ADDRESS + sizeof(Metadata_t))
@@ -61,15 +67,6 @@ extern "C" {
 #define RESCUE_METADATA_ADDRESS     (0x08010000U)
 #define RESCUE_DATA_BEGIN           (RESCUE_METADATA_ADDRESS + sizeof(Metadata_t))
 #endif
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC VARIABLE DEFINITIONS                                                */
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/* PUBLIC FUNCTION DECLARATIONS                                               */
-/*----------------------------------------------------------------------------*/
-
 
 #ifdef __cplusplus
 } /* extern C */
