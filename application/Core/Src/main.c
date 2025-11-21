@@ -24,9 +24,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "server.h"
-#include "no_init_ram.h"
+#include "niram/no_init_ram.h"
 #include "driver_w25qxx.h"
 #include "w25qxx_init.h"
+#include "w25qxx/flash_interface.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -69,6 +70,8 @@ const osThreadAttr_t blueLedTask_attributes = {
   .priority = (osPriority_t) osPriorityLow,
 };
 /* USER CODE BEGIN PV */
+
+static uint8_t f_w25q_verify_mem[512];
 
 /* USER CODE END PV */
 
@@ -404,9 +407,16 @@ void startCommTask(void *argument)
   {
     printf("W25Q128_Init failed!\r\n");
   }
-  else
+  else 
   {
-    printf("W25Q128_Init OK!\r\n");
+    if (W25Qxx_INTERFACE_Init(hnd, f_w25q_verify_mem, sizeof(f_w25q_verify_mem)))
+    {
+      printf("W25Q128_Init OK!\r\n");
+    }
+    else
+    {
+      printf("W25Qxx_INTERFACE_Init failed\r\n");
+    }
   }
 
   SERVER_UdpUpdateServer(hnd);

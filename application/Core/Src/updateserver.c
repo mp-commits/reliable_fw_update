@@ -44,19 +44,20 @@
 #include "lwip/sys.h"
 #include "lwip/api.h"
 
-#include "app_types.h"
 #include "bigendian.h"
-#include "crc32.h"
 #include "keystore.h"
 #include "metadata.h"
 #include "server.h"
 #include "system_reset.h"
 
+#include "crc/crc32.h"
 #include "ed25519.h"
 #include "sha512.h"
+#include "fragmentstore/default_app_types.h"
 #include "fragmentstore/fragmentstore.h"
 #include "fragmentstore/command.h"
 #include "updateserver/transfer.h"
+#include "w25qxx/flash_interface.h"
 
 /*----------------------------------------------------------------------------*/
 /* PRIVATE TYPE DEFINITIONS                                                   */
@@ -121,91 +122,6 @@ static Fragment_t       f_tempFragMem;
 static bool MetadataEqual(const Metadata_t* a, const Metadata_t* b)
 {
     return 0 == memcmp(a, b, sizeof(Metadata_t));
-}
-
-static bool VerifyMemory(Address_t address, size_t size, const uint8_t* cmp)
-{
-    uint8_t buf[128];
-
-    size_t pos = 0U;
-
-    while (pos < size)
-    {
-        const size_t left = size - pos;
-        const size_t blockSize = MIN(left, sizeof(buf));
-
-        const Address_t readAddr = address + pos;
-        if (0U != w25qxx_read(f_w25q128, readAddr, buf, blockSize))
-        {
-            return false;
-        }
-
-        if (0 != memcmp(buf, &cmp[pos], blockSize))
-        {
-            return false;
-        }
-
-        pos += blockSize;
-    }
-
-    return true;
-}
-
-/** Read fragment memory
- * 
- * @param address Read start address
- * @param size Read size
- * @param out Read data area
- * @return Read successful
- */
-bool ReadMemory(Address_t address, size_t size, uint8_t* out)
-{
-    return 0U == w25qxx_read(f_w25q128, address, out, size);
-}
-
-/** Write fragment memory
- * 
- * @param address Write start address
- * @param size Write size
- * @param out Write data area
- * @return Write successful
- */
-bool WriteMemory(Address_t address, size_t size, const uint8_t* in)
-{
-    if (0U != w25qxx_write(f_w25q128, address, (uint8_t*)in, size))
-    {
-        return false;
-    }
-
-    if (!VerifyMemory(address, size, in))
-    {
-        printf("Write verify failed miserably!\r\n");
-        return false;
-    }
-
-    return true;
-}
-
-/** Erase fragment memory sectors
- * 
- * @param address Erase start address (even sector address)
- * @param size Erase size (multiple of sector size)
- * @return Erase successful
- */
-bool EraseSectors(Address_t address, size_t size)
-{
-    const Address_t start = address;
-    const Address_t end = address + size;
-
-    for (Address_t pos = start; pos < end; pos += W25Qxx_SECTOR_SIZE)
-    {
-        if (0U != w25qxx_sector_erase_4k(f_w25q128, pos))
-        {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 static bool EnsureLastHash(const Fragment_t* next)
@@ -359,7 +275,7 @@ static uint8_t WriteDataById(
             printf("Invalid update command size: %u\r\n", size);
             return PROTOCOL_NACK_INVALID_REQUEST;
         }
-        printf("Received update metadata %lX\r\n", InlineCrc32(in, size));
+        printf("Received update metadata %lX\r\n", CRC32_Calculate(in, size));
         const Metadata_t* metadata = (const Metadata_t*)in;
         if (!ValidateMetadata(metadata))
         {
@@ -376,7 +292,7 @@ static uint8_t WriteDataById(
     case PROTOCOL_DATA_ID_FIRMWARE_ROLLBACK:
         if (size == sizeof(Metadata_t))
         {
-            printf("Received specific rollback command to %lx\r\n", InlineCrc32(in, size));
+            printf("Received specific rollback command to %lx\r\n", CRC32_Calculate(in, size));
             const Metadata_t* metadata = (const Metadata_t*)in;
             if (!ValidateMetadata(metadata))
             {
@@ -435,11 +351,11 @@ static uint8_t WriteDataById(
 static int FindSlotForMetadata(const Metadata_t* in, bool* alreadyExists)
 {
     int slot = -1;
-    if (in->type == APP_TYPE_RESCUE)
+    if (in->type == DEFAULT_APP_TYPE_RESCUE)
     {
         for (int i = 0; i < 3; i++)
         {
-            if (f_metadata[i].type == APP_TYPE_RESCUE)
+            if (f_metadata[i].type == DEFAULT_APP_TYPE_RESCUE)
             {
                 /* Always replace the existing rescue image */
                 slot = i;
@@ -466,7 +382,7 @@ static int FindSlotForMetadata(const Metadata_t* in, bool* alreadyExists)
                 break;
             }
             if (!MetadataEqual(&f_metadata[i], &FIRMWARE_METADATA) &&
-                (f_metadata[i].type != APP_TYPE_RESCUE))
+                (f_metadata[i].type != DEFAULT_APP_TYPE_RESCUE))
             {
                 /* Ensure we don't overwrite the copy of the current firmware or the rescue firmware */
                 slot = i;
@@ -480,7 +396,7 @@ static uint8_t PutMetadata(
     const uint8_t* data, 
     size_t size)
 {
-    printf("Received metadata %lX\r\n", InlineCrc32(data, size));
+    printf("Received metadata %lX\r\n", CRC32_Calculate(data, size));
 
     if (size != sizeof(Metadata_t))
     {
@@ -532,7 +448,7 @@ static uint8_t PutFragment(
     const uint8_t* data, 
     size_t size)
 {
-    printf("Received fragment %lX\r\n", InlineCrc32(data, size));
+    printf("Received fragment %lX\r\n", CRC32_Calculate(data, size));
 
     if (size != sizeof(Fragment_t))
     {
@@ -594,9 +510,9 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
             .memorySize = UPDATE_SLOT_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
         // Fragment area 1
         {
@@ -605,9 +521,9 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
             .memorySize = UPDATE_SLOT_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
         // Fragment area 2
         {
@@ -616,9 +532,9 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
             .memorySize = UPDATE_SLOT_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
         // Update command area
         {
@@ -627,9 +543,9 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
             .memorySize = 3U * W25Qxx_SECTOR_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
     };
 
@@ -641,7 +557,7 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
         switch (res)
         {
             case FA_ERR_OK:
-                printf("%s\r\n", (f_metadata[i].type == APP_TYPE_RESCUE) ? "RESCUE" : "FIRMWARE");
+                printf("%s\r\n", (f_metadata[i].type == DEFAULT_APP_TYPE_RESCUE) ? "RESCUE" : "FIRMWARE");
                 break;
             case FA_ERR_EMPTY:
                 printf("EMPTY\r\n");
@@ -665,7 +581,7 @@ void SERVER_UdpUpdateServer(w25qxx_handle_t *arg)
             memset(&f_metadata[i], 0, sizeof(Metadata_t));
         }
     }
-    REQUIRE(CA_InitStruct(&f_ca, &memConf[3], &InlineCrc32));
+    REQUIRE(CA_InitStruct(&f_ca, &memConf[3], &CRC32_Calculate));
     REQUIRE(US_InitServer(&f_us, ReadDataById, WriteDataById, PutMetadata, PutFragment));
     REQUIRE(TRANSFER_Init(&f_tb, &f_us, f_memBlock, sizeof(f_memBlock)));
 

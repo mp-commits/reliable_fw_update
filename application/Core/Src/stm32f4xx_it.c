@@ -23,7 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "system_reset.h"
-#include "no_init_ram.h"
+#include "niram/no_init_ram.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
