@@ -1,0 +1,3 @@
+[submodule "FwUpdateLibs"]
+	path = FwUpdateLibs
+	url = https://github.com/mp-commits/FwUpdateLibs.git
