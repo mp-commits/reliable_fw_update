@@ -32,14 +32,15 @@
 /*----------------------------------------------------------------------------*/
 
 #include "app_status.h"
-#include "app_types.h"
-#include "crc32.h"
+#include "crc/crc32.h"
 #include "installer.h"
+#include "fragmentstore/default_app_types.h"
 #include "fragmentstore/command.h"
 #include "fragmentstore/fragmentstore.h"
 #include "ed25519.h"
 #include "ed25519_extra.h"
-#include "no_init_ram.h"
+#include "niram/no_init_ram.h"
+#include "w25qxx/flash_interface.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -154,91 +155,6 @@ static inline bool MetadataEqual(const Metadata_t* a, const Metadata_t* b)
     return 0 == memcmp(a, b, sizeof(Metadata_t));
 }
 
-static bool VerifyMemory(Address_t address, size_t size, const uint8_t* cmp)
-{
-    uint8_t buf[128];
-
-    size_t pos = 0U;
-
-    while (pos < size)
-    {
-        const size_t left = size - pos;
-        const size_t blockSize = MIN(left, sizeof(buf));
-
-        const Address_t readAddr = address + pos;
-        if (0U != w25qxx_read(f_w25q128, readAddr, buf, blockSize))
-        {
-            return false;
-        }
-
-        if (0 != memcmp(buf, &cmp[pos], blockSize))
-        {
-            return false;
-        }
-
-        pos += blockSize;
-    }
-
-    return true;
-}
-
-/** Read fragment memory
- * 
- * @param address Read start address
- * @param size Read size
- * @param out Read data area
- * @return Read successful
- */
-bool ReadMemory(Address_t address, size_t size, uint8_t* out)
-{
-    return 0U == w25qxx_read(f_w25q128, address, out, size);
-}
-
-/** Write fragment memory
- * 
- * @param address Write start address
- * @param size Write size
- * @param out Write data area
- * @return Write successful
- */
-bool WriteMemory(Address_t address, size_t size, const uint8_t* in)
-{
-    if (0U != w25qxx_write(f_w25q128, address, (uint8_t*)in, size))
-    {
-        return false;
-    }
-
-    if (!VerifyMemory(address, size, in))
-    {
-        printf("Write verify failed miserably!\r\n");
-        return false;
-    }
-
-    return true;
-}
-
-/** Erase fragment memory sectors
- * 
- * @param address Erase start address (even sector address)
- * @param size Erase size (multiple of sector size)
- * @return Erase successful
- */
-bool EraseSectors(Address_t address, size_t size)
-{
-    const Address_t start = address;
-    const Address_t end = address + size;
-
-    for (Address_t pos = start; pos < end; pos += W25Qxx_SECTOR_SIZE)
-    {
-        if (0U != w25qxx_sector_erase_4k(f_w25q128, pos))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 /** Validate one fragment
  * 
  * @param frag Pointer to fragment structure
@@ -318,7 +234,7 @@ static bool VerifySlotContent(InstallSlot_t* slot)
 
         slot->lastFragIdx = lastIdx;
 
-        uint32_t nextStart = (meta->type == APP_TYPE_RESCUE)
+        uint32_t nextStart = (meta->type == DEFAULT_APP_TYPE_RESCUE)
             ? RESCUE_DATA_BEGIN
             : FIRST_FLASH_ADDRESS;
 
@@ -533,7 +449,7 @@ static bool InstallFrom(InstallSlot_t* slot)
     Metadata_t* meta = &slot->metadata;
     Fragment_t* frag = &slot->fragMem;
 
-    const uint32_t metadataAddress = (meta->type == APP_TYPE_RESCUE)
+    const uint32_t metadataAddress = (meta->type == DEFAULT_APP_TYPE_RESCUE)
         ? RESCUE_METADATA_ADDRESS
         : APP_METADATA_ADDRESS;
 
@@ -587,11 +503,11 @@ static bool EmptyMetadata(const Metadata_t* m)
 
 static bool InstallAllowed(const Metadata_t* target, bool automaticRollback)
 {
-    const Metadata_t* app = (target->type == APP_TYPE_RESCUE)
+    const Metadata_t* app = (target->type == DEFAULT_APP_TYPE_RESCUE)
         ? RESCUE_STATUS_GetMetadata()
         : APP_STATUS_GetMetadata();
 
-    const bool appValid = (target->type == APP_TYPE_RESCUE)
+    const bool appValid = (target->type == DEFAULT_APP_TYPE_RESCUE)
         ? RESCUE_STATUS_LastVerifyResult()
         : APP_STATUS_LastVerifyResult();
 
@@ -613,8 +529,8 @@ static bool InstallAllowed(const Metadata_t* target, bool automaticRollback)
         return true;
     }
 
-    if ((target->type != APP_TYPE_RESCUE) &&
-        (app->type == APP_TYPE_RESCUE))
+    if ((target->type != DEFAULT_APP_TYPE_RESCUE) &&
+        (app->type == DEFAULT_APP_TYPE_RESCUE))
     {
         return true;
     }
@@ -799,9 +715,9 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
             .memorySize = UPDATE_SLOT_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
         {
             .baseAddress = SLOT_1_ADDRESS,
@@ -809,9 +725,9 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
             .memorySize = UPDATE_SLOT_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
         {
             .baseAddress = SLOT_2_ADDRESS,
@@ -819,9 +735,9 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
             .memorySize = UPDATE_SLOT_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         },
         {
             .baseAddress = COMMAND_AREA_ADDRESS,
@@ -829,15 +745,15 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
             .memorySize = 3U * W25Qxx_SECTOR_SIZE,
             .eraseValue = 0xFF,
 
-            .Reader = ReadMemory,
-            .Writer = WriteMemory,
-            .Eraser = EraseSectors,
+            .Reader = W25Qxx_INTERFACE_ReadFlash,
+            .Writer = W25Qxx_INTERFACE_WriteAndVerifyFlash,
+            .Eraser = W25Qxx_INTERFACE_EraseFlash,
         }
     };
 
     _Static_assert((ARRAY_SIZE(f_slots) + 1U) <= ARRAY_SIZE(memConfs), "Not enough memconfs");
 
-    REQUIRE_V(CA_InitStruct(&f_ca, &memConfs[3], &InlineCrc32));
+    REQUIRE_V(CA_InitStruct(&f_ca, &memConfs[3], &CRC32_Calculate));
 
     for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
     {
@@ -847,7 +763,7 @@ void INSTALLER_InitAreas(w25qxx_handle_t* w25q128, const KeyContainer_t* keys)
             printf(
                 "Install slot %i contains a valid %s\r\n",
                 i,
-                (f_slots[i].metadata.type == APP_TYPE_RESCUE)
+                (f_slots[i].metadata.type == DEFAULT_APP_TYPE_RESCUE)
                     ? "rescue app"
                     : "firmware"
             );
@@ -926,7 +842,7 @@ bool INSTALLER_TryInstallRescueApp(const Metadata_t** out)
 {
     for (size_t i = 0; i < ARRAY_SIZE(f_slots); i++)
     {
-        if (f_slots[i].valid && f_slots[i].metadata.type == APP_TYPE_RESCUE)
+        if (f_slots[i].valid && f_slots[i].metadata.type == DEFAULT_APP_TYPE_RESCUE)
         {
             *out = &f_slots[i].metadata;
             return InstallFrom(&f_slots[i]);

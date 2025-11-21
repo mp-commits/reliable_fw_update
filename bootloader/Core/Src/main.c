@@ -31,8 +31,9 @@
 #include "fragmentstore/fragmentstore.h"
 #include "installer.h"
 #include "w25qxx_init.h"
+#include "w25qxx/flash_interface.h"
 #include "delay.h"
-#include "no_init_ram.h"
+#include "niram/no_init_ram.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,6 +59,8 @@ TIM_HandleTypeDef htim1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+
+static uint8_t f_w25qxx_verify_buf[512];
 
 /* USER CODE END PV */
 
@@ -162,7 +165,14 @@ int main(void)
   }
   else
   {
-    printf("W25Q128_Init OK!\r\n");
+    if (W25Qxx_INTERFACE_Init(hnd, f_w25qxx_verify_buf, sizeof(f_w25qxx_verify_buf)))
+    {
+      printf("W25Q128_Init OK!\r\n");
+    }
+    else
+    {
+      printf("W25Qxx_INTERFACE_Init failed\r\n");
+    }
   }
 
   KeyContainer_t keys = {

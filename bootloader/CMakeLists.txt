@@ -40,7 +40,6 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
-add_subdirectory(../common ${CMAKE_CURRENT_BINARY_DIR}/common)
 add_subdirectory(../FwUpdateLibs ${CMAKE_CURRENT_BINARY_DIR}/FwUpdateLibs)
 
 # Link directories setup
@@ -72,7 +71,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
-    libs::common
+    libs::niram
+    libs::crc
+    libs::w25qxx
     libs::fragmentstore
     libs::ed25519
 )

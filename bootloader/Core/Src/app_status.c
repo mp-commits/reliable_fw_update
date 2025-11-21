@@ -33,7 +33,7 @@
 
 #include "app_status.h"
 #include "ed25519.h"
-#include "crc32.h"
+#include "crc/crc32.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -165,8 +165,8 @@ bool APP_STATUS_LastMetadataVerifyResult(void)
 
 void APP_STATUS_PrintMetadata(const Metadata_t* metadata)
 {
-    const uint32_t fwSignCrc = InlineCrc32(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
-    const uint32_t metaSignCrc = InlineCrc32(metadata->metadataSignature, sizeof(metadata->metadataSignature));
+    const uint32_t fwSignCrc = CRC32_Calculate(metadata->firmwareSignature, sizeof(metadata->firmwareSignature));
+    const uint32_t metaSignCrc = CRC32_Calculate(metadata->metadataSignature, sizeof(metadata->metadataSignature));
 
     /* Add \0 terminator to metadata magic string */
     char metaStr[sizeof(metadata->magic) + 1U];
